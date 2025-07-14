@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "config",
+    "messaging",
+    "network",
+    "p2p-vpn",
+]
+resolver = "3"
+
+[workspace.dependencies]
