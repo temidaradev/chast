@@ -377,6 +377,9 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
+dependencies = [
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "const-oid"
@@ -1726,6 +1729,10 @@ checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
 [[package]]
 name = "messaging"
 version = "0.1.0"
+dependencies = [
+ "libp2p",
+ "network",
+]
 
 [[package]]
 name = "minimal-lexical"
@@ -1893,6 +1900,10 @@ dependencies = [
 [[package]]
 name = "network"
 version = "0.1.0"
+dependencies = [
+ "libp2p",
+ "tokio",
+]
 
 [[package]]
 name = "nix"
@@ -2019,10 +2030,12 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 name = "p2p-vpn"
 version = "0.1.0"
 dependencies = [
+ "config",
  "futures",
  "libp2p",
+ "messaging",
+ "network",
  "tokio",
- "tracing-subscriber",
 ]
 
 [[package]]

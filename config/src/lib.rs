@@ -1,14 +1,25 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+use tracing_subscriber::EnvFilter;
+
+pub fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .try_init();
+    Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub struct AppConfig {
+    pub topic_name: String,
+    pub listen_addresses: Vec<String>,
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            topic_name: "test-net".to_string(),
+            listen_addresses: vec![
+                "/ip4/0.0.0.0/udp/0/quic-v1".to_string(),
+                "/ip4/0.0.0.0/tcp/0".to_string(),
+            ],
+        }
     }
 }
