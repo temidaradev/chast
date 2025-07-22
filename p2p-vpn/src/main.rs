@@ -1,5 +1,7 @@
 use config::{init_logging, AppConfig};
 use futures::stream::StreamExt;
+use iced;
+use ui::*;
 use libp2p::swarm::SwarmEvent;
 use messaging::{handle_gossipsub_message, handle_mdns_discovered, handle_mdns_expired, MessageHandler};
 use network::{create_swarm, P2PBehaviourEvent};
@@ -23,7 +25,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     println!("Enter messages via STDIN and they will be sent to connected peers using Gossipsub");
-
+    handle_gui().await?;
     loop {
         select! {
             Ok(Some(line)) = stdin.next_line() => {
@@ -58,4 +60,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     }
+}
+
+async fn handle_gui() -> iced::Result {
+    iced::application("Counter App", GUI::update, GUI::view).run()
 }
