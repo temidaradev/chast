@@ -1,5 +1,5 @@
 use iced::Center;
-use iced::widget::{Column, button, column, text, text_input, scrollable};
+use iced::widget::{Column, button, column, scrollable, text, text_input};
 
 #[derive(Default)]
 pub struct GUI {
@@ -53,19 +53,14 @@ impl GUI {
 
         column![
             text("P2P Messaging").size(24),
-
-            scrollable(message_list)
-                .height(300),
-
+            scrollable(message_list).height(300),
             text_input("Type your message...", &self.input_value)
                 .on_input(Message::InputChanged)
                 .on_submit(Message::SendMessage)
                 .padding(10),
-
             button("Send Message")
                 .on_press(Message::SendMessage)
                 .padding(10),
-
             if !self.display_message.is_empty() {
                 column![
                     text(&self.display_message),
@@ -75,8 +70,8 @@ impl GUI {
                 column![]
             }
         ]
-            .padding(20)
-            .spacing(10)
-            .align_x(Center)
+        .padding(20)
+        .spacing(10)
+        .align_x(Center)
     }
 }

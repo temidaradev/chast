@@ -1,7 +1,7 @@
 use libp2p::{
-    gossipsub, mdns, noise,
+    SwarmBuilder, gossipsub, mdns, noise,
     swarm::{NetworkBehaviour, Swarm},
-    tcp, yamux, SwarmBuilder,
+    tcp, yamux,
 };
 use std::{
     collections::hash_map::DefaultHasher,
@@ -47,10 +47,8 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
                 gossipsub_config,
             )?;
 
-            let mdns = mdns::tokio::Behaviour::new(
-                mdns::Config::default(),
-                key.public().to_peer_id(),
-            )?;
+            let mdns =
+                mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
 
             Ok(P2PBehaviour { gossipsub, mdns })
         })?

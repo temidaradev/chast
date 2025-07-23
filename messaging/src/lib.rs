@@ -18,7 +18,11 @@ impl MessageHandler {
         Ok(())
     }
 
-    pub fn publish_message(&self, swarm: &mut P2PSwarm, message: &str) -> Result<(), Box<dyn Error>> {
+    pub fn publish_message(
+        &self,
+        swarm: &mut P2PSwarm,
+        message: &str,
+    ) -> Result<(), Box<dyn Error>> {
         if let Err(e) = swarm
             .behaviour_mut()
             .gossipsub
@@ -40,13 +44,13 @@ pub fn handle_mdns_discovered(
     }
 }
 
-pub fn handle_mdns_expired(
-    swarm: &mut P2PSwarm,
-    list: Vec<(libp2p::PeerId, libp2p::Multiaddr)>,
-) {
+pub fn handle_mdns_expired(swarm: &mut P2PSwarm, list: Vec<(libp2p::PeerId, libp2p::Multiaddr)>) {
     for (peer_id, _multiaddr) in list {
         println!("mDNS discover peer has expired: {peer_id}");
-        swarm.behaviour_mut().gossipsub.remove_explicit_peer(&peer_id);
+        swarm
+            .behaviour_mut()
+            .gossipsub
+            .remove_explicit_peer(&peer_id);
     }
 }
 

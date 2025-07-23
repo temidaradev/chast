@@ -1,12 +1,14 @@
-use config::{init_logging, AppConfig};
+use config::{AppConfig, init_logging};
 use futures::stream::StreamExt;
 use iced;
-use ui::*;
 use libp2p::swarm::SwarmEvent;
-use messaging::{handle_gossipsub_message, handle_mdns_discovered, handle_mdns_expired, MessageHandler};
-use network::{create_swarm, P2PBehaviourEvent};
+use messaging::{
+    MessageHandler, handle_gossipsub_message, handle_mdns_discovered, handle_mdns_expired,
+};
+use network::{P2PBehaviourEvent, create_swarm};
 use std::error::Error;
 use tokio::{io, io::AsyncBufReadExt, select};
+use ui::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
