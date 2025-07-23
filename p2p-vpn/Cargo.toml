@@ -5,10 +5,8 @@ edition = "2024"
 
 [dependencies]
 libp2p = { workspace = true }
-iced = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
 config = { workspace = true }
 network = { workspace = true }
 messaging = { workspace = true }
-ui = { workspace = true }
