@@ -1,5 +1,5 @@
 use libp2p::{
-    SwarmBuilder, gossipsub, mdns, noise,
+    SwarmBuilder, autonat, dcutr, gossipsub, identity, mdns, noise, relay,
     swarm::{NetworkBehaviour, Swarm},
     tcp, yamux,
 };
@@ -15,6 +15,9 @@ use tokio::io;
 pub struct P2PBehaviour {
     pub gossipsub: gossipsub::Behaviour,
     pub mdns: mdns::tokio::Behaviour,
+    pub relay: relay::Behaviour,
+    pub autonat: autonat::Behaviour,
+    pub dcutr: dcutr::Behaviour,
 }
 
 pub type P2PSwarm = Swarm<P2PBehaviour>;
@@ -50,7 +53,18 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
             let mdns =
                 mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
 
-            Ok(P2PBehaviour { gossipsub, mdns })
+            let relay = relay::Behaviour::new(key.public().to_peer_id(), relay::Config::default());
+            let autonat =
+                autonat::Behaviour::new(key.public().to_peer_id(), autonat::Config::default());
+            let dcutr = dcutr::Behaviour::new(key.public().to_peer_id());
+
+            Ok(P2PBehaviour {
+                gossipsub,
+                mdns,
+                relay,
+                autonat,
+                dcutr,
+            })
         })?
         .build();
 
