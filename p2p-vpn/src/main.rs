@@ -1,5 +1,6 @@
 use config::{AppConfig, init_logging};
 use futures::stream::StreamExt;
+use libp2p::Multiaddr;
 use libp2p::swarm::SwarmEvent;
 use messaging::{
     MessageHandler, handle_gossipsub_message, handle_mdns_discovered, handle_mdns_expired,
@@ -22,6 +23,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     for addr in &config.listen_addresses {
         swarm.listen_on(addr.parse()?)?;
+    }
+    if let Some(remote_addr) = &config.remote_peer_address {
+        let remote_multiaddr: Multiaddr = remote_addr.parse()?;
+        swarm.dial(remote_multiaddr)?;
+        println!("Dialing remote peer at {remote_addr}");
     }
 
     println!("Enter messages via STDIN and they will be sent to connected peers using Gossipsub");

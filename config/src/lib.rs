@@ -10,6 +10,7 @@ pub fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
 pub struct AppConfig {
     pub topic_name: String,
     pub listen_addresses: Vec<String>,
+    pub remote_peer_address: Option<String>,
 }
 
 impl Default for AppConfig {
@@ -19,7 +20,9 @@ impl Default for AppConfig {
             listen_addresses: vec![
                 "/ip4/0.0.0.0/udp/0/quic-v1".to_string(),
                 "/ip4/0.0.0.0/tcp/0".to_string(),
+                "/ip4/0.0.0.0/udp/0".to_string(),
             ],
+            remote_peer_address: None,
         }
     }
 }
