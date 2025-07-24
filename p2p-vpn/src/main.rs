@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
             (topic, vec![])
         }
         Command::Join { ticket } => {
-            let Ticket { topic, nodes } = Ticket::from_str(&ticket)?;
+            let Ticket { topic, nodes } = Ticket::from_str(ticket)?;
             println!("> joining chat room for topic {topic}");
             (topic, nodes)
         }
@@ -113,7 +113,7 @@ async fn subscribe_loop(mut receiver: GossipReceiver) -> Result<()> {
                     let name = names
                         .get(&from)
                         .map_or_else(|| from.fmt_short(), String::to_string);
-                    println!("{}: {}", name, text);
+                    println!("{name}: {text}");
                 }
             }
         }
