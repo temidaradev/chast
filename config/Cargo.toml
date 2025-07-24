@@ -1,8 +1,0 @@
-[package]
-name = "config"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-
