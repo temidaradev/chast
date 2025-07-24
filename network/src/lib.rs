@@ -40,10 +40,15 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
                 gossipsub::MessageId::from(s.finish().to_string())
             };
 
+            // Enhanced Gossipsub config for better auto-discovery
             let gossipsub_config = gossipsub::ConfigBuilder::default()
-                .heartbeat_interval(Duration::from_secs(10))
+                .heartbeat_interval(Duration::from_secs(5)) // More frequent heartbeats
                 .validation_mode(gossipsub::ValidationMode::Strict)
                 .message_id_fn(message_id_fn)
+                .mesh_n_high(12) // Higher mesh connectivity
+                .mesh_n_low(4)   // Minimum mesh connections
+                .gossip_lazy(6)  // More gossip propagation
+                .fanout_ttl(Duration::from_secs(60))
                 .build()
                 .map_err(io::Error::other)?;
 
@@ -52,8 +57,13 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
                 gossipsub_config,
             )?;
 
-            let mdns =
-                mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
+            // Enhanced mDNS for local network discovery
+            let mdns_config = mdns::Config {
+                ttl: Duration::from_secs(60),
+                query_interval: Duration::from_secs(5), // Query more frequently
+                enable_ipv6: true,
+            };
+            let mdns = mdns::tokio::Behaviour::new(mdns_config, key.public().to_peer_id())?;
 
             let relay_config = relay::Config {
                 max_reservations: 128,
@@ -65,15 +75,16 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
             };
             let relay = relay::Behaviour::new(key.public().to_peer_id(), relay_config);
 
-            let autonat =
-                autonat::Behaviour::new(key.public().to_peer_id(), autonat::Config::default());
+            let autonat = autonat::Behaviour::new(key.public().to_peer_id(), autonat::Config::default());
             let dcutr = dcutr::Behaviour::new(key.public().to_peer_id());
 
-            // Add Kademlia DHT for peer discovery
+            // Enhanced Kademlia for better peer discovery
             let store = kad::store::MemoryStore::new(key.public().to_peer_id());
-            let mut kademlia = kad::Behaviour::new(key.public().to_peer_id(), store);
+            let mut kad_config = kad::Config::default();
+            kad_config.set_query_timeout(Duration::from_secs(60));
+            kad_config.set_replication_factor(3.try_into().unwrap());
 
-            // Set Kademlia to server mode to help with routing
+            let mut kademlia = kad::Behaviour::with_config(key.public().to_peer_id(), store, kad_config);
             kademlia.set_mode(Some(kad::Mode::Server));
 
             Ok(P2PBehaviour {
@@ -90,31 +101,11 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
     Ok(swarm)
 }
 
-pub fn setup_kademlia_bootstrap(swarm: &mut P2PSwarm) -> Result<(), Box<dyn Error>> {
-    // Add bootstrap nodes to Kademlia DHT
-    let bootstrap_nodes = vec![
-        ("/dnsaddr/bootstrap.libp2p.io", "QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"),
-        ("/dnsaddr/bootstrap.libp2p.io", "QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa"),
-    ];
+// Auto-discovery initialization - this makes machines find each other automatically
+pub fn initialize_auto_discovery(swarm: &mut P2PSwarm) -> Result<(), Box<dyn Error>> {
+    println!("🔍 Initializing automatic peer discovery...");
 
-    for (addr_str, peer_id_str) in bootstrap_nodes {
-        if let Ok(addr) = addr_str.parse::<Multiaddr>() {
-            if let Ok(peer_id) = peer_id_str.parse() {
-                swarm.behaviour_mut().kademlia.add_address(&peer_id, addr.clone());
-                swarm.dial(addr)?;
-            }
-        }
-    }
-
-    // Bootstrap the DHT
-    if let Err(e) = swarm.behaviour_mut().kademlia.bootstrap() {
-        println!("Kademlia bootstrap failed: {:?}", e);
-    }
-
-    Ok(())
-}
-
-pub fn connect_to_bootstrap_nodes(swarm: &mut P2PSwarm) -> Result<(), Box<dyn Error>> {
+    // Step 1: Connect to public bootstrap nodes for global discovery
     let bootstrap_nodes = vec![
         "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
         "/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
@@ -124,24 +115,49 @@ pub fn connect_to_bootstrap_nodes(swarm: &mut P2PSwarm) -> Result<(), Box<dyn Er
     for addr_str in bootstrap_nodes {
         if let Ok(addr) = addr_str.parse::<Multiaddr>() {
             swarm.dial(addr.clone())?;
-            println!("Connecting to bootstrap node: {}", addr);
+
+            // Also add to Kademlia routing table
+            if let Some(peer_id) = addr.iter().find_map(|protocol| {
+                if let libp2p::multiaddr::Protocol::P2p(peer_id) = protocol {
+                    Some(peer_id)
+                } else {
+                    None
+                }
+            }) {
+                swarm.behaviour_mut().kademlia.add_address(&peer_id, addr);
+            }
         }
     }
 
-    Ok(())
-}
-
-pub fn connect_to_relay_servers(swarm: &mut P2PSwarm) -> Result<(), Box<dyn Error>> {
-    let relay_addresses = vec![
+    // Step 2: Connect to relay servers for NAT traversal
+    let relay_servers = vec![
         "/ip4/147.75.83.83/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN",
         "/ip4/147.75.83.83/udp/4001/quic/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN",
     ];
 
-    for addr_str in relay_addresses {
+    for addr_str in relay_servers {
         if let Ok(addr) = addr_str.parse::<Multiaddr>() {
             swarm.dial(addr)?;
         }
     }
 
+    // Step 3: Bootstrap Kademlia DHT
+    if let Err(e) = swarm.behaviour_mut().kademlia.bootstrap() {
+        println!("DHT bootstrap warning: {:?}", e);
+    }
+
+    println!("✅ Auto-discovery initialized!");
     Ok(())
+}
+
+// Continuous peer discovery - keeps finding new peers
+pub fn perform_peer_discovery(swarm: &mut P2PSwarm) {
+    let local_peer_id = *swarm.local_peer_id();
+
+    // Search for peers similar to our ID
+    swarm.behaviour_mut().kademlia.get_closest_peers(local_peer_id.to_bytes());
+
+    // Also search for random peers to expand network
+    let random_peer_id = identity::Keypair::generate_ed25519().public().to_peer_id();
+    swarm.behaviour_mut().kademlia.get_closest_peers(random_peer_id.to_bytes());
 }
