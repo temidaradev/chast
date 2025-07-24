@@ -1,174 +1,146 @@
-use config::{AppConfig, init_logging};
-use futures::stream::StreamExt;
-use libp2p::swarm::SwarmEvent;
-use messaging::{
-    MessageHandler, handle_gossipsub_message, handle_mdns_discovered, handle_mdns_expired,
+use std::{
+    num::NonZeroUsize,
+    ops::Add,
+    time::{Duration, Instant},
 };
-use network::{P2PBehaviourEvent, create_swarm, initialize_auto_discovery, perform_peer_discovery};
-use std::error::Error;
-use tokio::{io, io::AsyncBufReadExt, select, time};
+
+use anyhow::{bail, Result};
+use clap::Parser;
+use futures::StreamExt;
+use libp2p::{
+    bytes::BufMut,
+    identity, kad, noise,
+    swarm::{StreamProtocol, SwarmEvent},
+    tcp, yamux, PeerId,
+};
+use tracing_subscriber::EnvFilter;
+
+const BOOTNODES: [&str; 4] = [
+    "QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN",
+    "QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa",
+    "QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb",
+    "QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt",
+];
+
+const IPFS_PROTO_NAME: StreamProtocol = StreamProtocol::new("/ipfs/kad/1.0.0");
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    init_logging()?;
+async fn main() -> Result<()> {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .try_init();
 
-    let config = AppConfig::default();
-    let mut swarm = create_swarm()?;
-    let message_handler = MessageHandler::new(&config.topic_name);
+    // Create a random key for ourselves.
+    let local_key = identity::Keypair::generate_ed25519();
 
-    message_handler.subscribe(&mut swarm)?;
+    let mut swarm = libp2p::SwarmBuilder::with_existing_identity(local_key.clone())
+        .with_tokio()
+        .with_tcp(
+            tcp::Config::default(),
+            noise::Config::new,
+            yamux::Config::default,
+        )?
+        .with_behaviour(|key| {
+            let mut cfg = kad::Config::new(IPFS_PROTO_NAME);
+            cfg.set_query_timeout(Duration::from_secs(5 * 60));
+            let store = kad::store::MemoryStore::new(key.public().to_peer_id());
+            kad::Behaviour::with_config(key.public().to_peer_id(), store, cfg)
+        })?
+        .build();
 
-    // Listen on all available interfaces
-    let listen_addresses = vec![
-        "/ip4/0.0.0.0/tcp/0",
-        "/ip4/0.0.0.0/udp/0/quic-v1",
-        "/ip6/::/tcp/0",
-        "/ip6/::/udp/0/quic-v1",
-    ];
-
-    for addr in listen_addresses {
-        if let Ok(multiaddr) = addr.parse() {
-            let _ = swarm.listen_on(multiaddr);
-        }
+    // Add the bootnodes to the local routing table. `libp2p-dns` built
+    // into the `transport` resolves the `dnsaddr` when Kademlia tries
+    // to dial these nodes.
+    for peer in &BOOTNODES {
+        swarm
+            .behaviour_mut()
+            .add_address(&peer.parse()?, "/dnsaddr/bootstrap.libp2p.io".parse()?);
     }
 
-    // Initialize automatic peer discovery
-    initialize_auto_discovery(&mut swarm)?;
+    let cli_opt = Opt::parse();
 
-    let mut stdin = io::BufReader::new(io::stdin()).lines();
+    match cli_opt.argument {
+        CliArgument::GetPeers { peer_id } => {
+            let peer_id = peer_id.unwrap_or(PeerId::random());
+            println!("Searching for the closest peers to {peer_id}");
+            swarm.behaviour_mut().get_closest_peers(peer_id);
+        }
+        CliArgument::PutPkRecord {} => {
+            println!("Putting PK record into the DHT");
 
-    // Timers for continuous discovery
-    let mut discovery_timer = time::interval(time::Duration::from_secs(30));
-    let mut status_timer = time::interval(time::Duration::from_secs(10));
+            let mut pk_record_key = vec![];
+            pk_record_key.put_slice("/pk/".as_bytes());
+            pk_record_key.put_slice(swarm.local_peer_id().to_bytes().as_slice());
 
-    println!("🚀 P2P Auto-Discovery Node Started!");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("🔍 Automatic Peer Discovery Features:");
-    println!("   • mDNS: Finds peers on local network");
-    println!("   • DHT: Discovers peers globally via Kademlia");
-    println!("   • Bootstrap: Connects to public libp2p nodes");
-    println!("   • Relay: NAT traversal for hard-to-reach peers");
-    println!("   • AutoNAT: Detects network connectivity status");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("\n💬 Type messages to broadcast to all connected peers:");
-    println!("📊 Connection status will be shown every 10 seconds\n");
+            let mut pk_record =
+                kad::Record::new(pk_record_key, local_key.public().encode_protobuf());
+            pk_record.publisher = Some(*swarm.local_peer_id());
+            pk_record.expires = Some(Instant::now().add(Duration::from_secs(60)));
+
+            swarm
+                .behaviour_mut()
+                .put_record(pk_record, kad::Quorum::N(NonZeroUsize::new(3).unwrap()))?;
+        }
+    }
 
     loop {
-        select! {
-            // Handle user input
-            Ok(Some(line)) = stdin.next_line() => {
-                if line.trim().is_empty() {
-                    continue;
+        let event = swarm.select_next_some().await;
+
+        match event {
+            SwarmEvent::Behaviour(kad::Event::OutboundQueryProgressed {
+                                      result: kad::QueryResult::GetClosestPeers(Ok(ok)),
+                                      ..
+                                  }) => {
+                // The example is considered failed as there
+                // should always be at least 1 reachable peer.
+                if ok.peers.is_empty() {
+                    bail!("Query finished with no closest peers.")
                 }
 
-                let connected_peers = swarm.connected_peers().count();
-                if connected_peers == 0 {
-                    println!("⚠️  No peers connected yet. Message queued for when peers connect.");
-                }
+                println!("Query finished with closest peers: {:#?}", ok.peers);
 
-                if let Err(e) = message_handler.publish_message(&mut swarm, &line) {
-                    println!("❌ Error publishing message: {e:?}");
-                }
+                return Ok(());
             }
-
-            // Periodic peer discovery
-            _ = discovery_timer.tick() => {
-                perform_peer_discovery(&mut swarm);
-                println!("🔍 Searching for more peers...");
+            SwarmEvent::Behaviour(kad::Event::OutboundQueryProgressed {
+                                      result:
+                                      kad::QueryResult::GetClosestPeers(Err(kad::GetClosestPeersError::Timeout {
+                                                                                ..
+                                                                            })),
+                                      ..
+                                  }) => {
+                bail!("Query for closest peers timed out")
             }
+            SwarmEvent::Behaviour(kad::Event::OutboundQueryProgressed {
+                                      result: kad::QueryResult::PutRecord(Ok(_)),
+                                      ..
+                                  }) => {
+                println!("Successfully inserted the PK record");
 
-            // Status updates
-            _ = status_timer.tick() => {
-                let connected_peers = swarm.connected_peers().count();
-                let listening_addrs = swarm.listeners().count();
-
-                println!("📊 Status: {} peers connected, listening on {} addresses",
-                    connected_peers, listening_addrs);
-
-                if connected_peers == 0 {
-                    println!("   🔍 Still discovering peers...");
-                }
+                return Ok(());
             }
-
-            // Handle network events
-            event = swarm.select_next_some() => match event {
-                // mDNS discovered local peers
-                SwarmEvent::Behaviour(P2PBehaviourEvent::Mdns(
-                    libp2p::mdns::Event::Discovered(list)
-                )) => {
-                    for (peer_id, _addr) in &list {
-                        println!("🏠 Found local peer: {}", peer_id);
-                    }
-                    handle_mdns_discovered(&mut swarm, list);
-                },
-
-                // mDNS peer expired
-                SwarmEvent::Behaviour(P2PBehaviourEvent::Mdns(
-                    libp2p::mdns::Event::Expired(list)
-                )) => {
-                    for (peer_id, _addr) in &list {
-                        println!("🏠 Lost local peer: {}", peer_id);
-                    }
-                    handle_mdns_expired(&mut swarm, list);
-                },
-
-                // Received message from another peer
-                SwarmEvent::Behaviour(P2PBehaviourEvent::Gossipsub(
-                    libp2p::gossipsub::Event::Message {
-                        propagation_source: peer_id,
-                        message_id: id,
-                        message,
-                    }
-                )) => {
-                    handle_gossipsub_message(peer_id, id, message);
-                },
-
-                // DHT events - peer discovery
-                SwarmEvent::Behaviour(P2PBehaviourEvent::Kademlia(event)) => {
-                    match event {
-                        libp2p::kad::Event::OutboundQueryProgressed { result, .. } => {
-                            match result {
-                                libp2p::kad::QueryResult::GetClosestPeers(Ok(ok)) => {
-                                    for peer in ok.peers {
-                                        println!("🌐 DHT discovered peer: {}", peer.peer_id);
-                                        swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer.peer_id);
-                                    }
-                                }
-                                libp2p::kad::QueryResult::Bootstrap(Ok(_)) => {
-                                    println!("✅ DHT bootstrap successful");
-                                }
-                                _ => {}
-                            }
-                        }
-                        _ => {}
-                    }
-                },
-
-                // Connection events
-                SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
-                    println!("✅ Connected to: {} via {}", peer_id, endpoint.get_remote_address());
-                    swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
-                }
-
-                SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                    println!("❌ Disconnected from {}: {:?}", peer_id, cause);
-                }
-
-                SwarmEvent::NewListenAddr { address, .. } => {
-                    println!("🎧 Listening on: {}", address);
-                }
-
-                SwarmEvent::Behaviour(P2PBehaviourEvent::Autonat(event)) => {
-                    match event {
-                        libp2p::autonat::Event::StatusChanged { old, new } => {
-                            println!("🔄 NAT status changed: {:?} -> {:?}", old, new);
-                        }
-                        _ => {}
-                    }
-                }
-
-                _ => {}
+            SwarmEvent::Behaviour(kad::Event::OutboundQueryProgressed {
+                                      result: kad::QueryResult::PutRecord(Err(err)),
+                                      ..
+                                  }) => {
+                bail!(anyhow::Error::new(err).context("Failed to insert the PK record"));
             }
+            _ => {}
         }
     }
+}
+
+#[derive(Parser, Debug)]
+#[command(name = "libp2p Kademlia DHT example")]
+struct Opt {
+    #[command(subcommand)]
+    argument: CliArgument,
+}
+
+#[derive(Debug, Parser)]
+enum CliArgument {
+    GetPeers {
+        #[arg(long)]
+        peer_id: Option<PeerId>,
+    },
+    PutPkRecord {},
 }
