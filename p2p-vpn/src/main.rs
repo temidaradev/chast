@@ -1,13 +1,15 @@
 use config::{AppConfig, init_logging};
 use futures::stream::StreamExt;
-use libp2p::Multiaddr;
 use libp2p::swarm::SwarmEvent;
 use messaging::{
     MessageHandler, handle_gossipsub_message, handle_mdns_discovered, handle_mdns_expired,
 };
-use network::{P2PBehaviourEvent, create_swarm, connect_to_relay_servers};
+use network::{
+    P2PBehaviourEvent, create_swarm, connect_to_bootstrap_nodes,
+    connect_to_relay_servers, setup_kademlia_bootstrap
+};
 use std::error::Error;
-use tokio::{io, io::AsyncBufReadExt, select};
+use tokio::{io, io::AsyncBufReadExt, select, time};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -21,44 +23,55 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
-    // Listen on multiple addresses for better connectivity
+    // Listen on multiple addresses
     for addr in &config.listen_addresses {
         swarm.listen_on(addr.parse()?)?;
     }
 
-    // Connect to bootstrap nodes for better peer discovery
-    for bootstrap_addr in &config.bootstrap_nodes {
-        if let Ok(addr) = bootstrap_addr.parse::<Multiaddr>() {
-            swarm.dial(addr.clone())?;
-            println!("Connecting to bootstrap node: {}", addr);
-        }
+    // Automatic peer discovery setup
+    println!("🚀 Starting P2P node with automatic peer discovery...");
+
+    // Connect to bootstrap nodes for initial peer discovery
+    if let Err(e) = connect_to_bootstrap_nodes(&mut swarm) {
+        println!("Warning: Failed to connect to bootstrap nodes: {}", e);
     }
 
-    // Connect to relay servers if enabled
-    if config.enable_relay {
-        if let Err(e) = connect_to_relay_servers(&mut swarm) {
-            println!("Warning: Failed to connect to relay servers: {}", e);
-        }
+    // Connect to relay servers for NAT traversal
+    if let Err(e) = connect_to_relay_servers(&mut swarm) {
+        println!("Warning: Failed to connect to relay servers: {}", e);
     }
 
-    // Connect to specific remote peer if configured
-    if let Some(remote_addr) = &config.remote_peer_address {
-        let remote_multiaddr: Multiaddr = remote_addr.parse()?;
-        swarm.dial(remote_multiaddr)?;
-        println!("Dialing remote peer at {remote_addr}");
+    // Setup Kademlia DHT for peer discovery
+    if let Err(e) = setup_kademlia_bootstrap(&mut swarm) {
+        println!("Warning: Failed to setup Kademlia bootstrap: {}", e);
     }
 
-    println!("P2P Node Started!");
-    println!("- Local network discovery: Enabled (mDNS)");
-    println!("- Relay support: {}", if config.enable_relay { "Enabled" } else { "Disabled" });
-    println!("- Hole punching: {}", if config.enable_hole_punching { "Enabled" } else { "Disabled" });
-    println!("\nEnter messages via STDIN and they will be sent to connected peers using Gossipsub");
+    // Periodic peer discovery
+    let mut discovery_interval = time::interval(time::Duration::from_secs(30));
+
+    println!("✅ Node started! Automatic peer discovery enabled:");
+    println!("   • mDNS: Local network discovery");
+    println!("   • DHT: Global peer discovery");
+    println!("   • Relay: NAT traversal");
+    println!("   • Bootstrap: Initial peer connections");
+    println!("\nEnter messages to broadcast to all connected peers:");
 
     loop {
         select! {
             Ok(Some(line)) = stdin.next_line() => {
                 if let Err(e) = message_handler.publish_message(&mut swarm, &line) {
                     println!("Error publishing message: {e:?}");
+                }
+            }
+            _ = discovery_interval.tick() => {
+                // Periodic peer discovery
+                let connected_peers = swarm.connected_peers().count();
+                println!("📊 Connected peers: {}", connected_peers);
+
+                if connected_peers < 3 {
+                    // Try to find more peers
+                    let local_peer_id = swarm.local_peer_id().to_bytes();
+                    swarm.behaviour_mut().kademlia.get_closest_peers(local_peer_id);
                 }
             }
             event = swarm.select_next_some() => match event {
@@ -81,23 +94,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 )) => {
                     handle_gossipsub_message(peer_id, id, message);
                 },
+                SwarmEvent::Behaviour(P2PBehaviourEvent::Kademlia(event)) => {
+                    match event {
+                        libp2p::kad::Event::OutboundQueryProgressed { result, .. } => {
+                            match result {
+                                libp2p::kad::QueryResult::GetClosestPeers(Ok(ok)) => {
+                                    for peer in ok.peers {
+                                        println!("🔍 Discovered peer via DHT: {}", peer.peer_id);
+                                        swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer.peer_id);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        _ => {}
+                    }
+                },
                 SwarmEvent::NewListenAddr { address, .. } => {
-                    println!("Local node is listening on {address}");
+                    println!("🎧 Listening on: {address}");
                 }
                 SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
-                    println!("Connected to peer: {} via {}", peer_id, endpoint.get_remote_address());
+                    println!("✅ Connected to: {} via {}", peer_id, endpoint.get_remote_address());
+                    swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
                 }
                 SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                    println!("Connection to {} closed: {:?}", peer_id, cause);
-                }
-                SwarmEvent::Behaviour(P2PBehaviourEvent::Autonat(event)) => {
-                    println!("AutoNAT event: {:?}", event);
-                }
-                SwarmEvent::Behaviour(P2PBehaviourEvent::Dcutr(event)) => {
-                    println!("DCUtR event: {:?}", event);
-                }
-                SwarmEvent::Behaviour(P2PBehaviourEvent::Relay(event)) => {
-                    println!("Relay event: {:?}", event);
+                    println!("❌ Disconnected from {}: {:?}", peer_id, cause);
                 }
                 _ => {}
             }

@@ -14,7 +14,9 @@ libp2p = { version = "0.56.0", features = [ "tokio", "gossipsub", "mdns", "noise
     "ping",
     "relay",
     "dcutr",
-    "autonat"] }
+    "autonat",
+    "kad"
+] }
 tokio = { version = "1.46.1", features = ["full"] }
 futures = "0.3.31"
 tracing-subscriber = "0.3.19"
