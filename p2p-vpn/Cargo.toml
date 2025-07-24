@@ -10,6 +10,3 @@ futures = { workspace = true }
 config = { workspace = true }
 network = { workspace = true }
 messaging = { workspace = true }
-tracing-subscriber = "0.3.19"
-anyhow = "1.0.98"
-clap = { version = "4.5.41", features = ["derive"] }
