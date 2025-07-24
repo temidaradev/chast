@@ -1,12 +1,12 @@
 use anyhow::Result;
-use messaging::*;
-use ticket::*;
 use clap::Parser;
 use futures_lite::StreamExt;
-use iroh::{Endpoint, protocol::Router, Watcher};
-use iroh_gossip::{net::Gossip, proto::TopicId, api::Event, api::GossipReceiver};
+use iroh::{Endpoint, Watcher, protocol::Router};
+use iroh_gossip::{api::Event, api::GossipReceiver, net::Gossip, proto::TopicId};
+use messaging::*;
 use std::collections::HashMap;
 use std::str::FromStr;
+use ticket::*;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -21,11 +21,8 @@ struct Args {
 #[derive(Parser, Debug)]
 enum Command {
     Open,
-    Join {
-        ticket: String,
-    },
+    Join { ticket: String },
 }
-
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -54,7 +51,11 @@ async fn main() -> Result<()> {
         .spawn();
 
     let ticket = {
-        let me = endpoint.node_addr().get().expect("REASON").ok_or_else(|| anyhow::anyhow!("No node address available"))?;
+        let me = endpoint
+            .node_addr()
+            .get()
+            .expect("REASON")
+            .ok_or_else(|| anyhow::anyhow!("No node address available"))?;
         let nodes = vec![me];
         Ticket { topic, nodes }
     };

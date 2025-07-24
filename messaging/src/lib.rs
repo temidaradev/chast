@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use iroh::NodeId;
 use anyhow::Result;
+use iroh::NodeId;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
