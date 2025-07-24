@@ -5,7 +5,7 @@ use libp2p::swarm::SwarmEvent;
 use messaging::{
     MessageHandler, handle_gossipsub_message, handle_mdns_discovered, handle_mdns_expired,
 };
-use network::{P2PBehaviourEvent, create_swarm};
+use network::{P2PBehaviourEvent, create_swarm, connect_to_relay_servers};
 use std::error::Error;
 use tokio::{io, io::AsyncBufReadExt, select};
 
@@ -21,16 +21,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut stdin = io::BufReader::new(io::stdin()).lines();
 
+    // Listen on multiple addresses for better connectivity
     for addr in &config.listen_addresses {
         swarm.listen_on(addr.parse()?)?;
     }
+
+    // Connect to bootstrap nodes for better peer discovery
+    for bootstrap_addr in &config.bootstrap_nodes {
+        if let Ok(addr) = bootstrap_addr.parse::<Multiaddr>() {
+            swarm.dial(addr.clone())?;
+            println!("Connecting to bootstrap node: {}", addr);
+        }
+    }
+
+    // Connect to relay servers if enabled
+    if config.enable_relay {
+        if let Err(e) = connect_to_relay_servers(&mut swarm) {
+            println!("Warning: Failed to connect to relay servers: {}", e);
+        }
+    }
+
+    // Connect to specific remote peer if configured
     if let Some(remote_addr) = &config.remote_peer_address {
         let remote_multiaddr: Multiaddr = remote_addr.parse()?;
         swarm.dial(remote_multiaddr)?;
         println!("Dialing remote peer at {remote_addr}");
     }
 
-    println!("Enter messages via STDIN and they will be sent to connected peers using Gossipsub");
+    println!("P2P Node Started!");
+    println!("- Local network discovery: Enabled (mDNS)");
+    println!("- Relay support: {}", if config.enable_relay { "Enabled" } else { "Disabled" });
+    println!("- Hole punching: {}", if config.enable_hole_punching { "Enabled" } else { "Disabled" });
+    println!("\nEnter messages via STDIN and they will be sent to connected peers using Gossipsub");
+
     loop {
         select! {
             Ok(Some(line)) = stdin.next_line() => {
@@ -60,6 +83,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 },
                 SwarmEvent::NewListenAddr { address, .. } => {
                     println!("Local node is listening on {address}");
+                }
+                SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                    println!("Connected to peer: {} via {}", peer_id, endpoint.get_remote_address());
+                }
+                SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                    println!("Connection to {} closed: {:?}", peer_id, cause);
+                }
+                SwarmEvent::Behaviour(P2PBehaviourEvent::Autonat(event)) => {
+                    println!("AutoNAT event: {:?}", event);
+                }
+                SwarmEvent::Behaviour(P2PBehaviourEvent::Dcutr(event)) => {
+                    println!("DCUtR event: {:?}", event);
+                }
+                SwarmEvent::Behaviour(P2PBehaviourEvent::Relay(event)) => {
+                    println!("Relay event: {:?}", event);
                 }
                 _ => {}
             }

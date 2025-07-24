@@ -1,7 +1,7 @@
 use libp2p::{
     SwarmBuilder, autonat, dcutr, gossipsub, identity, mdns, noise, relay,
     swarm::{NetworkBehaviour, Swarm},
-    tcp, yamux,
+    tcp, yamux, Multiaddr,
 };
 use std::{
     collections::hash_map::DefaultHasher,
@@ -31,7 +31,8 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
             yamux::Config::default,
         )?
         .with_quic()
-        .with_behaviour(|key| {
+        .with_relay_client(noise::Config::new, yamux::Config::default)?
+        .with_behaviour(|key, relay_behaviour| {
             let message_id_fn = |message: &gossipsub::Message| {
                 let mut s = DefaultHasher::new();
                 message.data.hash(&mut s);
@@ -53,7 +54,17 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
             let mdns =
                 mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())?;
 
-            let relay = relay::Behaviour::new(key.public().to_peer_id(), relay::Config::default());
+            // Enable relay server capabilities
+            let relay_config = relay::Config {
+                max_reservations: 128,
+                max_reservations_per_peer: 4,
+                reservation_duration: Duration::from_secs(60 * 60), // 1 hour
+                max_circuits: 16,
+                max_circuits_per_peer: 4,
+                ..Default::default()
+            };
+            let relay = relay::Behaviour::new(key.public().to_peer_id(), relay_config);
+
             let autonat =
                 autonat::Behaviour::new(key.public().to_peer_id(), autonat::Config::default());
             let dcutr = dcutr::Behaviour::new(key.public().to_peer_id());
@@ -69,4 +80,20 @@ pub fn create_swarm() -> Result<P2PSwarm, Box<dyn Error>> {
         .build();
 
     Ok(swarm)
+}
+
+pub fn connect_to_relay_servers(swarm: &mut P2PSwarm) -> Result<(), Box<dyn Error>> {
+    // Public relay servers (you can add your own)
+    let relay_addresses = vec![
+        "/ip4/147.75.83.83/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN",
+        "/ip4/147.75.83.83/udp/4001/quic/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN",
+    ];
+
+    for addr_str in relay_addresses {
+        let addr: Multiaddr = addr_str.parse()?;
+        swarm.dial(addr)?;
+        println!("Connecting to relay server: {}", addr_str);
+    }
+
+    Ok(())
 }
