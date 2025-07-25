@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = [ "gui",
     "messaging",
     "p2p-vpn",
     "ticket",
@@ -9,6 +9,7 @@ resolver = "3"
 [workspace.dependencies]
 iroh = "0.90.0"
 iroh-gossip = "0.90.0"
+iced = "0.13.1"
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.46.1", features = ["full"] }
 futures-lite = "2.6.0"
@@ -19,3 +20,4 @@ clap = { version = "4.5.41", features = ["derive"]}
 data-encoding = "2.9.0"
 messaging = { path = "messaging" }
 ticket = { path = "ticket" }
+gui = { path = "gui" }

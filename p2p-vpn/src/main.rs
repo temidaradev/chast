@@ -28,6 +28,8 @@ enum Command {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
+    handle_gui().unwrap();
+
     let (topic, nodes) = match &args.command {
         Command::Open => {
             let topic = TopicId::from_bytes(rand::random());
@@ -130,4 +132,8 @@ fn input_loop(line_tx: tokio::sync::mpsc::Sender<String>) -> Result<()> {
         line_tx.blocking_send(buffer.clone())?;
         buffer.clear();
     }
+}
+
+fn handle_gui() -> iced::Result {
+    iced::run("P2P VPN", gui::Counter::update, gui::Counter::view)
 }
