@@ -1,7 +1,6 @@
 use iced::Center;
 use iced::widget::{Column, button, column, text, text_input};
 use iroh_gossip::proto::{TopicId, topic};
-use rand::Rng;
 
 #[derive(Default)]
 pub struct Join {
