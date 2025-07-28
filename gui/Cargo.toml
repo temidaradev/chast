@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 iced = { workspace = true }
 clap = { workspace = true }
+anyhow = { workspace = true }
 rand = { workspace = true }
 iroh-gossip = { workspace = true }
 hex = { workspace = true }
