@@ -1,5 +1,5 @@
 use iced::Center;
-use iced::widget::{Column, button, column, container, text, text_input};
+use iced::widget::{Column, button, column, text, text_input};
 // use iroh::{Endpoint, NodeId};
 // use iroh_gossip::api::GossipReceiver;
 // use iroh_gossip::net::Gossip;
@@ -66,10 +66,10 @@ impl App {
             Message::TokenChanged(token) => self.join.token = token,
             Message::CreateRoom => {
                 let topic = TopicId::from_bytes(rand::random());
-                self.topic = Some(topic.clone());
+                self.topic = Some(topic);
                 self.messages.clear();
                 self.page = Page::ChatRoom;
-                println!("Created room: {:?}", topic);
+                println!("Created room: {topic:?}");
             }
             Message::JoinRoom => {
                 println!("Attempting to join room with token: {}", self.join.token);
@@ -78,7 +78,7 @@ impl App {
                     .and_then(|b| if b.len() == 32 { Some(b) } else { None })
                     .map(|b| TopicId::from_bytes(b.try_into().unwrap()))
                 {
-                    println!("Successfully joined room: {:?}", topic);
+                    println!("Successfully joined room: {topic:?}");
                     self.topic = Some(topic);
                     self.page = Page::ChatRoom;
                 }
@@ -126,7 +126,7 @@ impl App {
                     self.messages
                         .iter()
                         .enumerate()
-                        .fold(column![], |col, (i, msg)| {
+                        .fold(column![], |col, (_, msg)| {
                             let bubble = container(text(msg).size(18)).padding(12);
                             col.push(bubble)
                         })
@@ -154,7 +154,7 @@ impl App {
 
                 column![
                     text("Chat Room").size(36),
-                    text(format!("Room Token: {}", token_str)).size(16),
+                    text(format!("Room Token: {token_str}")).size(16),
                     Space::with_height(10),
                     container(scroll)
                         .height(iced::Length::FillPortion(3))
