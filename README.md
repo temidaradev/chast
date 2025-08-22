@@ -29,3 +29,7 @@ cargo run -- --name user2 join <ticket>
 ```
 
 Now both users are connected directly and can chat in real time.
+
+Test:
+
+[Screencast_20250822_225853.webm](https://github.com/user-attachments/assets/1325c830-45b2-4e6a-bf31-a450a923bb86)
