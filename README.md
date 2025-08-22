@@ -1,6 +1,13 @@
 # P2P Chat in Rust
 
-A lightweight peer-to-peer chat application written in Rust. It allows users to create and join chat rooms without relying on a central server.
+A lightweight peer-to-peer CLI chat application written in Rust. It allows users to create and join chat rooms without relying on a central server.
+
+## Requirements
+- [Rust](https://www.rust-lang.org/) (latest stable version recommended)  
+- Cargo (comes bundled with Rust)  
+- A terminal or shell to run the commands  
+- Internet connection for peers to connect with each other
+
 
 ## How it works
 - One user opens a chat room and receives a unique ticket.
