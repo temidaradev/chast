@@ -1,9 +1,24 @@
-# P2P CHAT WRITTEN IN RUST
+# P2P Chat in Rust
 
-Running the Application
+A lightweight peer-to-peer chat application written in Rust. It allows users to create and join chat rooms without relying on a central server.
 
-`cargo run -- --name user1 open`
+## How it works
+- One user opens a chat room and receives a unique ticket.
+- Other users use this ticket to connect directly to the host.
+- Messages are exchanged peer-to-peer in real time.
 
-To join an existing chat room:
+## Usage
 
-`cargo run -- --name user2 join <ticket>`
+Start a new chat room:
+```sh
+cargo run -- --name user1 open
+```
+
+This will generate a ticket that you can share with others.
+
+Join an existing chat room (replace <ticket> with the one provided):
+```sh
+cargo run -- --name user2 join <ticket>
+```
+
+Now both users are connected directly and can chat in real time.
