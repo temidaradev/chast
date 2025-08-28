@@ -8,6 +8,25 @@ A lightweight peer-to-peer CLI chat application written in Rust. It allows users
 - A terminal or shell to run the commands  
 - Internet connection for peers to connect with each other
 
+## Installation
+
+Clone the repository:
+```sh
+git clone https://github.com/temidaradev/rust-p2p-chat.git
+cd rust-p2p-chat
+```
+
+Build the project:
+```sh
+cargo build --release
+```
+
+The compiled binary will be available at: ``target/release/p2p-chat``
+
+You can run it directly: ``./target/release/p2p-chat --help``
+
+Or continue from [Usage](https://github.com/temidaradev/rust-p2p-chat/blob/serve-cli/README.md#Usage)
+
 
 ## How it works
 - One user opens a chat room and receives a unique ticket.
