@@ -12,11 +12,6 @@ pub struct Ticket {
 }
 
 impl Ticket {
-    pub fn set_ticket(&mut self, ticket: &Ticket) {
-        self.topic = ticket.topic;
-        self.nodes = ticket.nodes.clone();
-    }
-
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         serde_json::from_slice(bytes).map_err(Into::into)
     }
@@ -30,7 +25,7 @@ impl fmt::Display for Ticket {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut text = data_encoding::BASE32_NOPAD.encode(&self.to_bytes()[..]);
         text.make_ascii_lowercase();
-        write!(f, "{text}")
+        write!(f, "{}", text)
     }
 }
 
