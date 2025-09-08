@@ -18,6 +18,10 @@ git clone https://github.com/temidaradev/rust-p2p-chat.git
 cd rust-p2p-chat
 ```
 
+Or install from release:
+
+[v0.1](https://github.com/temidaradev/rust-p2p-chat/releases/tag/v0.1)
+
 Build the project:
 
 ```sh
