@@ -56,6 +56,20 @@ Join an existing chat room (replace <ticket> with the one provided):
 cargo run -- --name user2 join <ticket>
 ```
 
+For the exe:
+
+This will start the room:
+
+```sh
+./p2p-vpn.exe --name user1 open
+```
+
+And with this you can join to a room:
+
+```sh
+./p2p-vpn.exe --name user2 join <ticket>
+```
+
 Now both users are connected directly and can chat in real time.
 
 Test:
