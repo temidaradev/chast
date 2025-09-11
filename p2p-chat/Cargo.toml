@@ -1,5 +1,5 @@
 [package]
-name = "p2p-vpn"
+name = "p2p-chat"
 version = "0.1.0"
 edition = "2024"
 

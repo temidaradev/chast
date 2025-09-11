@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "messaging",
-    "p2p-vpn",
+    "p2p-chat",
     "ticket",
 ]
 resolver = "3"
