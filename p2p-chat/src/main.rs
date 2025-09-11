@@ -7,6 +7,9 @@ use messaging::*;
 use std::collections::HashMap;
 use std::str::FromStr;
 use ticket::*;
+use gtk4::{prelude::*, glib, Application, ApplicationWindow};
+
+const APP_ID: &str = "com.temidaradev.p2p_chat";
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -26,6 +29,7 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    handle_gui();
     let args = Args::parse();
 
     let (topic, nodes) = match &args.command {
@@ -54,8 +58,7 @@ async fn main() -> Result<()> {
         let me = endpoint
             .node_addr()
             .get()
-            .expect("REASON")
-            .ok_or_else(|| anyhow::anyhow!("No node address available"))?;
+            .expect("ERROR");
         let nodes = vec![me];
         Ticket { topic, nodes }
     };
@@ -130,4 +133,19 @@ fn input_loop(line_tx: tokio::sync::mpsc::Sender<String>) -> Result<()> {
         line_tx.blocking_send(buffer.clone())?;
         buffer.clear();
     }
+}
+
+fn handle_gui() -> glib::ExitCode {
+    let app = Application::builder().application_id(APP_ID).build();
+    app.connect_activate(build_ui);
+    app.run()
+}
+
+fn build_ui(app: &Application) {
+    let window = ApplicationWindow::builder()
+        .application(app)
+        .title("P2P Chat")
+        .build();
+
+    window.present();
 }
