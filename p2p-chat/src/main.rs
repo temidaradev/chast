@@ -7,7 +7,8 @@ use messaging::*;
 use std::collections::HashMap;
 use std::str::FromStr;
 use ticket::*;
-use gtk4::{prelude::*, glib, Application, ApplicationWindow};
+
+pub mod GUI;
 
 const APP_ID: &str = "com.temidaradev.p2p_chat";
 
@@ -29,7 +30,7 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    handle_gui();
+    GUI::handle_gui();
     let args = Args::parse();
 
     let (topic, nodes) = match &args.command {
@@ -133,19 +134,4 @@ fn input_loop(line_tx: tokio::sync::mpsc::Sender<String>) -> Result<()> {
         line_tx.blocking_send(buffer.clone())?;
         buffer.clear();
     }
-}
-
-fn handle_gui() -> glib::ExitCode {
-    let app = Application::builder().application_id(APP_ID).build();
-    app.connect_activate(build_ui);
-    app.run()
-}
-
-fn build_ui(app: &Application) {
-    let window = ApplicationWindow::builder()
-        .application(app)
-        .title("P2P Chat")
-        .build();
-
-    window.present();
 }
