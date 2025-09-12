@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = ["chat_gui",
     "messaging",
     "p2p-chat",
     "ticket",
@@ -20,3 +20,4 @@ clap = { version = "4.5.41", features = ["derive"]}
 data-encoding = "2.9.0"
 messaging = { path = "messaging" }
 ticket = { path = "ticket" }
+chat_gui = { path = "chat_gui" }

@@ -1,16 +1,15 @@
 use anyhow::Result;
+use chat_gui::*;
 use clap::Parser;
 use futures_lite::StreamExt;
-use iroh::{Endpoint, Watcher, protocol::Router};
+use iroh::{protocol::Router, Endpoint, Watcher};
 use iroh_gossip::{api::Event, api::GossipReceiver, net::Gossip, proto::TopicId};
 use messaging::*;
 use std::collections::HashMap;
 use std::str::FromStr;
 use ticket::*;
 
-pub mod GUI;
-
-const APP_ID: &str = "com.temidaradev.p2p_chat";
+pub const APP_ID: &str = "com.temidaradev.p2p_chat";
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -30,7 +29,7 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    GUI::handle_gui();
+    gui::handle_gui();
     let args = Args::parse();
 
     let (topic, nodes) = match &args.command {
@@ -56,10 +55,7 @@ async fn main() -> Result<()> {
         .spawn();
 
     let ticket = {
-        let me = endpoint
-            .node_addr()
-            .get()
-            .expect("ERROR");
+        let me = endpoint.node_addr().get().expect("ERROR");
         let nodes = vec![me];
         Ticket { topic, nodes }
     };

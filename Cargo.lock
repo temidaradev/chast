@@ -373,6 +373,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "chat_gui"
+version = "0.1.0"
+dependencies = [
+ "gtk4",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2566,10 +2573,10 @@ name = "p2p-chat"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chat_gui",
  "clap",
  "data-encoding",
  "futures-lite",
- "gtk4",
  "iroh",
  "iroh-gossip",
  "messaging",
