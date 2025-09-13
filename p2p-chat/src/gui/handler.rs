@@ -6,7 +6,7 @@ pub struct Handler {}
 
 impl Handler {
     pub fn handle_gui() -> Result<(), Box<dyn Error>> {
-        let ui = AppWindow::new()?;
+        let ui = AppWindow2::new()?;
 
         ui.run()?;
 
