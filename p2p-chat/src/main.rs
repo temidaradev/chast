@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use ticket::*;
 pub mod gui;
-pub const APP_ID: &str = "com.temidaradev.p2p_chat";
 
 #[derive(Parser, Debug)]
 struct Args {
