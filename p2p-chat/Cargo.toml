@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+slint.workspace = true
 iroh = { workspace = true }
 iroh-gossip = { workspace = true }
 tokio = { workspace = true }
@@ -16,4 +17,6 @@ clap = { workspace = true }
 data-encoding = { workspace = true }
 messaging = { workspace = true }
 ticket = { workspace = true }
-chat_gui.workspace = true
+
+[build-dependencies]
+slint-build.workspace = true

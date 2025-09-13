@@ -1,5 +1,6 @@
 use anyhow::Result;
-use chat_gui::*;
+//use chat_gui::*;
+use crate::gui::handler;
 use clap::Parser;
 use futures_lite::StreamExt;
 use iroh::{protocol::Router, Endpoint, Watcher};
@@ -8,7 +9,7 @@ use messaging::*;
 use std::collections::HashMap;
 use std::str::FromStr;
 use ticket::*;
-
+pub mod gui;
 pub const APP_ID: &str = "com.temidaradev.p2p_chat";
 
 #[derive(Parser, Debug)]
@@ -29,7 +30,7 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    gui::handle_gui();
+    handler::Handler::handle_gui();
     let args = Args::parse();
 
     let (topic, nodes) = match &args.command {
