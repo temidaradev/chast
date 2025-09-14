@@ -1,45 +1,43 @@
 import { Button, VerticalBox, HorizontalBox, LineEdit } from "std-widgets.slint";
 
-export component AppWindow inherits Window {
+export component StartWindow inherits Window {
+  title: "Chast";
   width: 800px;
   height: 600px;
-  background: #313e50;
+  background: black;
+
+  callback switch-to-join-window;
 
   GridLayout {
     padding-left: 300px;
     padding-right: 300px;
     padding-top: 250px;
     padding-bottom: 250px;
-    spacing: 25px;
+    spacing: 10px;
 
     Row {
         Text {
           text: "Chast";
           horizontal-alignment: center;
-          font-size: 24px;
+          font-size: 48px;
           font-weight: 900;
         }
     }
     Row {
-        LineEdit {
-          horizontal-alignment: center;
-          placeholder-text: "Enter a username";
-        }
-    }
-    Row {
-      HorizontalBox {
+      VerticalBox {
         Button {
           text: "Create Room";
         }
         Button {
           text: "Join Room";
+          clicked => { switch-to-join-window(); }
         }
       }
     }
   }
 }
 
-export component AppWindow2 inherits Window {
+export component JoinWindow inherits Window {
   width: 800px;
   height: 600px;
   background: #313e50;
@@ -65,15 +63,28 @@ export component AppWindow2 inherits Window {
           placeholder-text: "Enter a username";
         }
     }
+  }
+}
+
+export component ChatWindow inherits Window {
+  width: 800px;
+  height: 600px;
+  background: #313e50;
+
+  GridLayout {
+    padding-left: 300px;
+    padding-right: 300px;
+    padding-top: 250px;
+    padding-bottom: 250px;
+    spacing: 25px;
+
     Row {
-      HorizontalBox {
-        Button {
-          text: "Create Room";
+        Text {
+          text: "Chast";
+          horizontal-alignment: center;
+          font-size: 24px;
+          font-weight: 900;
         }
-        Button {
-          text: "Join Room";
-        }
-      }
     }
   }
 }
