@@ -7,6 +7,7 @@ export component StartWindow inherits Window {
   background: black;
 
   callback switch-to-join-window;
+  callback switch-to-create-window;
 
   GridLayout {
     padding-left: 300px;
@@ -27,6 +28,7 @@ export component StartWindow inherits Window {
       VerticalBox {
         Button {
           text: "Create Room";
+          clicked => { switch-to-create-window(); } 
         }
         Button {
           text: "Join Room";
@@ -40,7 +42,7 @@ export component StartWindow inherits Window {
 export component JoinWindow inherits Window {
   width: 800px;
   height: 600px;
-  background: #313e50;
+  background: black;
 
   GridLayout {
     padding-left: 300px;
@@ -50,23 +52,26 @@ export component JoinWindow inherits Window {
     spacing: 25px;
 
     Row {
-        Text {
-          text: "Chast";
+        LineEdit {
+          placeholder-text: "Enter a username";
           horizontal-alignment: center;
-          font-size: 24px;
-          font-weight: 900;
         }
     }
     Row {
         LineEdit {
           horizontal-alignment: center;
-          placeholder-text: "Enter a username";
+          placeholder-text: "Enter a room token";
+        }
+    }
+    Row {
+        Button {
+          text: "Join";
         }
     }
   }
 }
 
-export component ChatWindow inherits Window {
+export component CreateWindow inherits Window {
   width: 800px;
   height: 600px;
   background: #313e50;
@@ -79,11 +84,14 @@ export component ChatWindow inherits Window {
     spacing: 25px;
 
     Row {
-        Text {
-          text: "Chast";
+        LineEdit {
+          placeholder-text: "Enter a username";
           horizontal-alignment: center;
-          font-size: 24px;
-          font-weight: 900;
+        }
+    }
+    Row {
+        Button {
+          text: "Create";
         }
     }
   }

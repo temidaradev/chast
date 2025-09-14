@@ -1,6 +1,6 @@
 use anyhow::Result;
 //use chat_gui::*;
-use crate::gui::handler;
+use crate::gui::app::App;
 use clap::Parser;
 use futures_lite::StreamExt;
 use iroh::{protocol::Router, Endpoint, Watcher};
@@ -29,7 +29,7 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    handler::Handler::handle_gui();
+    App::run();
     let args = Args::parse();
 
     let (topic, nodes) = match &args.command {
