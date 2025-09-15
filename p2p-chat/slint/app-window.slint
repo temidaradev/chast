@@ -1,4 +1,4 @@
-import { Button, VerticalBox, HorizontalBox, LineEdit } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, LineEdit, TextEdit } from "std-widgets.slint";
 
 export component StartWindow inherits Window {
   title: "Chast";
@@ -44,6 +44,8 @@ export component JoinWindow inherits Window {
   height: 600px;
   background: black;
 
+  callback switch-to-chat-window;
+
   GridLayout {
     padding-left: 300px;
     padding-right: 300px;
@@ -66,6 +68,7 @@ export component JoinWindow inherits Window {
     Row {
         Button {
           text: "Join";
+          clicked => { switch-to-chat-window(); }
         }
     }
   }
@@ -74,7 +77,9 @@ export component JoinWindow inherits Window {
 export component CreateWindow inherits Window {
   width: 800px;
   height: 600px;
-  background: #313e50;
+  background: black;
+
+  callback switch-to-chat-window;
 
   GridLayout {
     padding-left: 300px;
@@ -92,6 +97,33 @@ export component CreateWindow inherits Window {
     Row {
         Button {
           text: "Create";
+          clicked => { switch-to-chat-window(); }
+        }
+    }
+  }
+}
+
+export component ChatWindow inherits Window {
+  width: 800px;
+  height: 600px;
+  background: black;
+
+  GridLayout {
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    spacing: 25px;
+
+    Row {
+        TextEdit {
+          placeholder-text: "Message";
+          horizontal-alignment: center;
+        }
+    }
+    Row {
+        Button {
+          text: "Send";
         }
     }
   }

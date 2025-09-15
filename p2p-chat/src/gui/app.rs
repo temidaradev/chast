@@ -15,13 +15,17 @@ impl App {
         let create = CreateWindow::new()?;
         let create_handle = create.as_weak();
 
+        let chat = ChatWindow::new()?;
+        let chat_handle = chat.as_weak();
+
         let val = main_handle.clone();
+        let val_join = join_handle.clone();
 
         main.show();
 
         main.on_switch_to_join_window(move || {
             let main = val.unwrap();
-            let join = join_handle.unwrap();
+            let join = val_join.unwrap();
             join.show();
             main.hide();
         });
