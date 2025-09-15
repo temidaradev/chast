@@ -20,12 +20,15 @@ impl App {
 
         let val = main_handle.clone();
         let val_join = join_handle.clone();
+        let val_create = create_handle.clone();
+        let val_chat = chat_handle.clone();
 
         main.show();
 
         main.on_switch_to_join_window(move || {
             let main = val.unwrap();
             let join = val_join.unwrap();
+
             join.show();
             main.hide();
         });
@@ -33,9 +36,28 @@ impl App {
         main.on_switch_to_create_window(move || {
             let val = main_handle.clone();
             let main = val.unwrap();
-            let create = create_handle.unwrap();
+            let create = val_create.unwrap();
+
             create.show();
             main.hide();
+        });
+
+        join.on_switch_to_chat_window(move || {
+            let val_join = join_handle.clone();
+            let join = val_join.unwrap();
+            let chat = chat_handle.unwrap();
+
+            chat.show();
+            join.hide();
+        });
+
+        create.on_switch_to_chat_window(move || {
+            let val_create = create_handle.clone();
+            let create = val_create.unwrap();
+            let chat = val_chat.unwrap();
+
+            chat.show();
+            create.hide();
         });
 
         main.run()?;
