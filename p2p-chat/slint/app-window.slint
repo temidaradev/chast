@@ -45,6 +45,8 @@ export component JoinWindow inherits Window {
   background: black;
 
   callback switch-to-chat-window;
+  in-out property<string> username: "";
+  in-out property<string> token: "";
 
   GridLayout {
     padding-left: 300px;
@@ -55,14 +57,22 @@ export component JoinWindow inherits Window {
 
     Row {
         LineEdit {
+          text: username;
           placeholder-text: "Enter a username";
           horizontal-alignment: center;
+          edited(text) => {
+            text = username;
+          }
         }
     }
     Row {
         LineEdit {
+          text: token;
           horizontal-alignment: center;
           placeholder-text: "Enter a room token";
+          edited(text) => {
+            text = token;
+          }
         }
     }
     Row {
@@ -80,6 +90,7 @@ export component CreateWindow inherits Window {
   background: black;
 
   callback switch-to-chat-window;
+  in-out property<string> username: "";
 
   GridLayout {
     padding-left: 300px;
@@ -90,8 +101,12 @@ export component CreateWindow inherits Window {
 
     Row {
         LineEdit {
+          text = username;
           placeholder-text: "Enter a username";
           horizontal-alignment: center;
+          edited(text) => {
+            text = username;
+          }
         }
     }
     Row {
