@@ -61,7 +61,7 @@ export component JoinWindow inherits Window {
           placeholder-text: "Enter a username";
           horizontal-alignment: center;
           edited(text) => {
-            text = username;
+            username = text;
           }
         }
     }
@@ -71,7 +71,7 @@ export component JoinWindow inherits Window {
           horizontal-alignment: center;
           placeholder-text: "Enter a room token";
           edited(text) => {
-            text = token;
+            token = text;
           }
         }
     }
@@ -101,11 +101,11 @@ export component CreateWindow inherits Window {
 
     Row {
         LineEdit {
-          text = username;
+          text: username;
           placeholder-text: "Enter a username";
           horizontal-alignment: center;
           edited(text) => {
-            text = username;
+            username = text;
           }
         }
     }
