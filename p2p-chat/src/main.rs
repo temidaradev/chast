@@ -1,6 +1,5 @@
-use anyhow::Result;
-//use chat_gui::*;
 use crate::gui::app::App;
+use anyhow::Result;
 use clap::Parser;
 use futures_lite::StreamExt;
 use iroh::{protocol::Router, Endpoint, Watcher};
@@ -29,7 +28,7 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    App::run();
+    let _ = App::run();
     let args = Args::parse();
 
     let (topic, nodes) = match &args.command {
@@ -70,7 +69,7 @@ async fn main() -> Result<()> {
             endpoint.add_node_addr(node)?;
         }
     };
-    let (mut sender, receiver) = gossip.subscribe_and_join(topic, node_ids).await?.split();
+    let (sender, receiver) = gossip.subscribe_and_join(topic, node_ids).await?.split();
     println!("> connected!");
 
     if let Some(name) = args.name {

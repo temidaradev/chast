@@ -42,7 +42,7 @@ impl App {
             main.hide();
         });
 
-        join.on_switch_to_chat_window(move || {
+        join.on_switch_to_chat_window(move |_, _| {
             let val_join = join_handle.clone();
             let join = val_join.unwrap();
             let chat = chat_handle.unwrap();
@@ -51,7 +51,7 @@ impl App {
             join.hide();
         });
 
-        create.on_switch_to_chat_window(move || {
+        create.on_switch_to_chat_window(move |_| {
             let val_create = create_handle.clone();
             let create = val_create.unwrap();
             let chat = val_chat.unwrap();

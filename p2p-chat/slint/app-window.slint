@@ -1,145 +1,378 @@
-import { Button, VerticalBox, HorizontalBox, LineEdit, TextEdit } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, LineEdit, TextEdit, ScrollView, ListView } from "std-widgets.slint";
+
+export struct ChatMessage {
+    username: string,
+    content: string,
+    timestamp: string,
+    is-own: bool,
+}
 
 export component StartWindow inherits Window {
-  title: "Chast";
-  width: 800px;
-  height: 600px;
-  background: black;
-
-  callback switch-to-join-window;
-  callback switch-to-create-window;
-
-  GridLayout {
-    padding-left: 300px;
-    padding-right: 300px;
-    padding-top: 250px;
-    padding-bottom: 250px;
-    spacing: 10px;
-
-    Row {
-        Text {
-          text: "Chast";
-          horizontal-alignment: center;
-          font-size: 48px;
-          font-weight: 900;
+    title: "Chast - P2P Chat";
+    width: 800px;
+    height: 600px;
+    background: #1a1a1a;
+    
+    callback switch-to-join-window;
+    callback switch-to-create-window;
+    
+    GridLayout {
+        padding-left: 200px;
+        padding-right: 200px;
+        padding-top: 200px;
+        padding-bottom: 200px;
+        spacing: 20px;
+        
+        Row {
+            Text {
+                text: "Chast";
+                horizontal-alignment: center;
+                font-size: 48px;
+                font-weight: 900;
+                color: #00ff88;
+            }
+        }
+        
+        Row {
+            Text {
+                text: "Peer-to-Peer Chat";
+                horizontal-alignment: center;
+                font-size: 16px;
+                color: #888;
+            }
+        }
+        
+        Row {
+            VerticalBox {
+                spacing: 15px;
+                
+                Button {
+                    text: "Create Room";
+                    height: 50px;
+                    clicked => { switch-to-create-window(); }
+                }
+                
+                Button {
+                    text: "Join Room";
+                    height: 50px;
+                    clicked => { switch-to-join-window(); }
+                }
+            }
         }
     }
-    Row {
-      VerticalBox {
-        Button {
-          text: "Create Room";
-          clicked => { switch-to-create-window(); } 
-        }
-        Button {
-          text: "Join Room";
-          clicked => { switch-to-join-window(); }
-        }
-      }
-    }
-  }
 }
 
 export component JoinWindow inherits Window {
-  width: 800px;
-  height: 600px;
-  background: black;
-
-  callback switch-to-chat-window;
-  in-out property<string> username: "";
-  in-out property<string> token: "";
-
-  GridLayout {
-    padding-left: 300px;
-    padding-right: 300px;
-    padding-top: 250px;
-    padding-bottom: 250px;
-    spacing: 25px;
-
-    Row {
-        LineEdit {
-          text: username;
-          placeholder-text: "Enter a username";
-          horizontal-alignment: center;
-          edited(text) => {
-            username = text;
-          }
+    width: 800px;
+    height: 600px;
+    background: #1a1a1a;
+    title: "Join P2P Chat Room";
+    
+    callback switch-to-chat-window(string /* username */, string /* peer-id */);
+    callback switch-to-start-window;
+    
+    in-out property<string> username: "";
+    in-out property<string> peer-id: "";
+    
+    GridLayout {
+        padding-left: 200px;
+        padding-right: 200px;
+        padding-top: 150px;
+        padding-bottom: 150px;
+        spacing: 25px;
+        
+        Row {
+            Text {
+                text: "Join Room";
+                horizontal-alignment: center;
+                font-size: 32px;
+                color: #0088ff;
+                font-weight: 700;
+            }
+        }
+        
+        Row {
+            LineEdit {
+                text: username;
+                placeholder-text: "Enter your username";
+                horizontal-alignment: center;
+                height: 40px;
+                edited(text) => {
+                    username = text;
+                }
+            }
+        }
+        
+        Row {
+            LineEdit {
+                text: peer-id;
+                horizontal-alignment: center;
+                placeholder-text: "Enter peer ID or room code";
+                height: 40px;
+                edited(text) => {
+                    peer-id = text;
+                }
+            }
+        }
+        
+        Row {
+            HorizontalBox {
+                spacing: 10px;
+                
+                Button {
+                    text: "Back";
+                    height: 40px;
+                    clicked => { switch-to-start-window(); }
+                }
+                
+                Button {
+                    text: "Join Room";
+                    height: 40px;
+                    clicked => { 
+                        if (username != "" && peer-id != "") {
+                            switch-to-chat-window(username, peer-id);
+                        }
+                    }
+                }
+            }
         }
     }
-    Row {
-        LineEdit {
-          text: token;
-          horizontal-alignment: center;
-          placeholder-text: "Enter a room token";
-          edited(text) => {
-            token = text;
-          }
-        }
-    }
-    Row {
-        Button {
-          text: "Join";
-          clicked => { switch-to-chat-window(); }
-        }
-    }
-  }
 }
 
 export component CreateWindow inherits Window {
-  width: 800px;
-  height: 600px;
-  background: black;
-
-  callback switch-to-chat-window;
-  in-out property<string> username: "";
-
-  GridLayout {
-    padding-left: 300px;
-    padding-right: 300px;
-    padding-top: 250px;
-    padding-bottom: 250px;
-    spacing: 25px;
-
-    Row {
-        LineEdit {
-          text: username;
-          placeholder-text: "Enter a username";
-          horizontal-alignment: center;
-          edited(text) => {
-            username = text;
-          }
+    width: 800px;
+    height: 600px;
+    background: #1a1a1a;
+    title: "Create P2P Chat Room";
+    
+    callback switch-to-chat-window(string /* username */);
+    callback switch-to-start-window;
+    
+    in-out property<string> username: "";
+    
+    GridLayout {
+        padding-left: 200px;
+        padding-right: 200px;
+        padding-top: 150px;
+        padding-bottom: 150px;
+        spacing: 25px;
+        
+        Row {
+            Text {
+                text: "Create Room";
+                horizontal-alignment: center;
+                font-size: 32px;
+                color: #00ff88;
+                font-weight: 700;
+            }
+        }
+        
+        Row {
+            LineEdit {
+                text: username;
+                placeholder-text: "Enter your username";
+                horizontal-alignment: center;
+                height: 40px;
+                edited(text) => {
+                    username = text;
+                }
+            }
+        }
+        
+        Row {
+            VerticalBox {
+                Button {
+                    text: "Back";
+                    height: 40px;
+                    clicked => { switch-to-start-window(); }
+                }
+                
+                Button {
+                    text: "Create Room";
+                    height: 40px;
+                    clicked => { 
+                        if (username != "") {
+                            switch-to-chat-window(username);
+                        }
+                    }
+                }
+            }
         }
     }
-    Row {
-        Button {
-          text: "Create";
-          clicked => { switch-to-chat-window(); }
-        }
-    }
-  }
 }
 
 export component ChatWindow inherits Window {
-  width: 800px;
-  height: 600px;
-  background: black;
+    width: 1000px;
+    height: 700px;
+    background: #1a1a1a;
+    title: "P2P Chat";
+    
+    callback send-message(string /* message */);
+    callback disconnect();
+    
+    in-out property<string> current-message: "";
+    in-out property<string> current-username: "";
+    in-out property<string> connection-status: "Disconnected";
+    in-out property<[ChatMessage]> messages: [];
+    in-out property<[string]> online-users: [];
+    
+    HorizontalBox {
+        spacing: 10px;
+        padding: 10px;
+        
+        Rectangle {
+            width: 200px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            
+            VerticalBox {
+                padding: 10px;
+                spacing: 10px;
+                
+                Text {
+                    text: "Online Users";
+                    font-weight: 700;
+                    font-size: 16px;
+                }
+                
+                Rectangle {
+                    height: 2px;
+                    background: #444;
+                }
+                
+                ScrollView {
+                    VerticalBox {
+                        for user in online-users: Rectangle {
+                            height: 30px;
+                            background: user == current-username ? #00ff8844 : transparent;
+                            border-radius: 4px;
+                            
+                            Text {
+                                text: user;
+                                vertical-alignment: center;
+                                horizontal-alignment: left;
+                                x: 8px;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        VerticalBox {
+            spacing: 10px;
+            
+            Rectangle {
+                height: 50px;
+                background: #2a2a2a;
+                border-radius: 8px;
+                
+                HorizontalBox {
+                    padding: 15px;
+                    spacing: 10px;
+                    alignment: space-between;
 
-  GridLayout {
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    spacing: 25px;
-
-    Row {
-        TextEdit {
-          placeholder-text: "Message";
-          horizontal-alignment: center;
+                    Text {
+                        text: "P2P Chat Room";
+                        color: white;
+                        font-size: 18px;
+                        font-weight: 600;
+                    }
+                    
+                     
+                    Rectangle {
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 6px;
+                        background: connection-status == "Connected" ? #00ff88 : 
+                                    connection-status == "Connecting" ? #ff8800 : #ff4444;
+                    }
+                        
+                    Text {
+                        text: connection-status;
+                        font-size: 14px;
+                    }
+                        
+                    Button {
+                        text: "Disconnect";
+                        width: 100px;
+                        height: 30px;
+                        clicked => { disconnect(); }
+                    }
+                }
+            }
+            
+            ScrollView {
+                viewport-height: messages.length * 60px;
+                
+                VerticalBox {
+                    spacing: 5px;
+                    
+                    for message in messages: Rectangle {
+                        height: 60px;
+                        background: message.is-own ? #00ff8822 : #333;
+                        border-radius: 8px;
+                        
+                        VerticalBox {
+                            padding: 8px;
+                            spacing: 2px;
+                            
+                            HorizontalBox {
+                                Text {
+                                    text: message.username;
+                                    color: message.is-own ? #00ff88 : #0088ff;
+                                    font-weight: 600;
+                                    font-size: 12px;
+                                }
+                                
+                                Text {
+                                    text: message.timestamp;
+                                    color: #666;
+                                    font-size: 10px;
+                                    horizontal-alignment: right;
+                                }
+                            }
+                            
+                            Text {
+                                text: message.content;
+                                color: white;
+                                font-size: 14px;
+                                wrap: word-wrap;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            HorizontalBox {
+                spacing: 10px;
+                height: 50px;
+                
+                LineEdit {
+                    text: current-message;
+                    placeholder-text: "Type your message...";
+                    edited(text) => {
+                        current-message = text;
+                    }
+                    accepted => {
+                        if (current-message != "") {
+                            send-message(current-message);
+                            current-message = "";
+                        }
+                    }
+                }
+                
+                Button {
+                    text: "Send";
+                    width: 80px;
+                    clicked => {
+                        if (current-message != "") {
+                            send-message(current-message);
+                            current-message = "";
+                        }
+                    }
+                }
+            }
         }
     }
-    Row {
-        Button {
-          text: "Send";
-        }
-    }
-  }
 }
