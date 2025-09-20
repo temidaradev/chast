@@ -33,17 +33,17 @@ impl App {
             main.hide();
         });
 
+        let val = main_handle.clone();
         main.on_switch_to_create_window(move || {
-            let val = main_handle.clone();
             let main = val.unwrap();
             let create = val_create.unwrap();
 
             create.show();
             main.hide();
         });
-
+        
+        let val_join = join_handle.clone();
         join.on_switch_to_chat_window(move |_, _| {
-            let val_join = join_handle.clone();
             let join = val_join.unwrap();
             let chat = chat_handle.unwrap();
 
@@ -51,8 +51,8 @@ impl App {
             join.hide();
         });
 
+        let val_create = create_handle.clone();
         create.on_switch_to_chat_window(move |_| {
-            let val_create = create_handle.clone();
             let create = val_create.unwrap();
             let chat = val_chat.unwrap();
 
