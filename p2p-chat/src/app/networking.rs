@@ -9,6 +9,8 @@ use ticket::*;
 
 use crate::app::{app_state::AppState, types, ui_handlers::update_messages};
 
+const DEFAULT_RELAY_URL: &str = "https://relay.iroh.link";
+
 pub async fn setup_networking(
     ticket: Option<Ticket>,
     username: String,
@@ -49,9 +51,7 @@ pub async fn setup_networking(
         // Add relay URLs from the discovery service
         if let Some(_discovery) = endpoint.discovery() {
             // Get relay URLs from the n0 discovery service
-            let relay_url = "https://relay.iroh.link"
-                .parse()
-                .expect("Invalid relay URL");
+            let relay_url = DEFAULT_RELAY_URL.parse().expect("Invalid relay URL");
             node_addr = node_addr.with_relay_url(relay_url);
         }
 
