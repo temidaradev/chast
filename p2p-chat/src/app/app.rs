@@ -13,7 +13,7 @@ use crate::app::{
 pub struct App {}
 
 impl App {
-    pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run() -> Result<()> {
         let rt = tokio::runtime::Runtime::new()?;
         let _guard = rt.enter();
 
