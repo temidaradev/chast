@@ -2,8 +2,7 @@ use anyhow::Result;
 use iroh::NodeAddr;
 use iroh_gossip::proto::TopicId;
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Ticket {

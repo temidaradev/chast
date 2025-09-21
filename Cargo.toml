@@ -9,6 +9,7 @@ resolver = "3"
 [workspace.dependencies]
 slint = "1.13.1"
 slint-build = "1.13.1"
+chrono = "0.4"
 iroh = "0.91.2"
 iroh-gossip = "0.91.0"
 serde = { version = "1.0.219", features = ["derive"] }
