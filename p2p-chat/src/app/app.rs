@@ -1,6 +1,6 @@
 use anyhow::Result;
 use slint::{ComponentHandle, Weak};
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, time::Duration};
 
 use crate::app::{
     app_state::AppState,
@@ -14,8 +14,9 @@ pub struct App {}
 
 impl App {
     pub fn run() -> Result<()> {
-        let rt = tokio::runtime::Runtime::new()?;
-        let _guard = rt.enter();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
 
         let main = types::StartWindow::new()?;
         let main_handle = main.as_weak();
@@ -43,9 +44,12 @@ impl App {
         );
 
         let _ = main.show();
-        main.run()?;
 
-        Ok(())
+        let result = main.run();
+
+        rt.shutdown_timeout(std::time::Duration::from_secs(5));
+
+        result.map_err(|e| anyhow::anyhow!("Slint error: {}", e))
     }
 
     fn setup_navigation(
