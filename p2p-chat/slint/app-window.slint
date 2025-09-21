@@ -5,6 +5,7 @@ export struct ChatMessage {
     content: string,
     timestamp: string,
     is-own: bool,
+    is-system: bool,
 }
 
 export component StartWindow inherits Window {
@@ -202,8 +203,8 @@ export component CreateWindow inherits Window {
 }
 
 export component ChatWindow inherits Window {
-    width: 1000px;
-    height: 700px;
+    width: 800px;
+    height: 600px;
     background: #1a1a1a;
     title: "P2P Chat";
     
@@ -260,83 +261,116 @@ export component ChatWindow inherits Window {
         }
         
         VerticalBox {
-            spacing: 10px;
             
             Rectangle {
-                height: 50px;
-                background: #2a2a2a;
-                border-radius: 8px;
+                height: 55px;
+                background: #2d2d2d;
+                border-radius: 10px;
                 
                 HorizontalBox {
                     padding: 15px;
-                    spacing: 10px;
+                    spacing: 12px;
                     alignment: space-between;
-
-                    Text {
-                        text: "P2P Chat Room";
-                        color: white;
-                        font-size: 18px;
-                        font-weight: 600;
+                    
+                    Rectangle {
+                        background: connection-status == "Connected" ? #00ff8815 : 
+                                   connection-status == "Connecting" ? #ff880015 : #ff444415;
+                        border-color: connection-status == "Connected" ? #00ff8840 : 
+                                     connection-status == "Connecting" ? #ff880040 : #ff444440;
+                        border-width: 1px;
+                        border-radius: 14px;
+                        height: 28px;
+                        min-width: 100px;
+                        y: (parent.height - self.height) / 2;
+                        
+                        HorizontalBox {
+                            padding: 8px;
+                            spacing: 6px;
+                            alignment: center;
+                            
+                            Text {
+                                text: connection-status;
+                                font-size: 10px;
+                                font-weight: 600;
+                                color: white;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                        }
                     }
                     
-                     
                     Rectangle {
-                        width: 12px;
-                        height: 12px;
-                        border-radius: 6px;
-                        background: connection-status == "Connected" ? #00ff88 : 
-                                    connection-status == "Connecting" ? #ff8800 : #ff4444;
-                    }
+                        width: 85px;
+                        height: 28px;
+                        background: #444;
+                        border-radius: 14px;
+                        y: (parent.height - self.height) / 2;
                         
-                    Text {
-                        text: connection-status;
-                        font-size: 14px;
-                    }
-                        
-                    Button {
-                        text: "Disconnect";
-                        width: 100px;
-                        height: 30px;
-                        clicked => { disconnect(); }
+                        TouchArea {
+                            clicked => { disconnect(); }
+                            
+                            Rectangle {
+                                width: 100%;
+                                height: 100%;
+                                background: parent.pressed ? #555 : parent.has-hover ? #4a4a4a : transparent;
+                                border-radius: 14px;
+                                
+                                Text {
+                                    text: "Disconnect";
+                                    color: #ff6666;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
                     }
                 }
             }
             
             ScrollView {
-                viewport-height: messages.length * 60px;
-                
                 VerticalBox {
-                    spacing: 5px;
+                    spacing: 3px;
                     
                     for message in messages: Rectangle {
-                        height: 60px;
-                        background: message.is-own ? #00ff8822 : #333;
+                        background: message.is-own ? #00ff8822 : 
+                                   message.is-system ? #444444 : #333;
                         border-radius: 8px;
                         
                         VerticalBox {
-                            padding: 8px;
-                            spacing: 2px;
+                            padding: 4px;
+                            spacing: 1px;
                             
                             HorizontalBox {
                                 Text {
                                     text: message.username;
-                                    color: message.is-own ? #00ff88 : #0088ff;
+                                    color: message.is-own ? #00ff88 : 
+                                           message.is-system ? #ffaa00 : #0088ff;
                                     font-weight: 600;
-                                    font-size: 12px;
+                                    font-size: 11px;
                                 }
                                 
                                 Text {
                                     text: message.timestamp;
                                     color: #666;
-                                    font-size: 10px;
+                                    font-size: 9px;
                                     horizontal-alignment: right;
                                 }
                             }
                             
-                            Text {
+                            if message.is-system: TextEdit {
+                                text: message.content;
+                                font-size: 11px;
+                                read-only: true;
+                                wrap: word-wrap;
+                                width: 100%;
+                            }
+                            
+                            if !message.is-system: Text {
                                 text: message.content;
                                 color: white;
-                                font-size: 14px;
+                                font-size: 13px;
                                 wrap: word-wrap;
                             }
                         }
