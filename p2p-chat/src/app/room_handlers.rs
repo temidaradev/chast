@@ -13,6 +13,20 @@ use crate::app::{
     ui_handlers::update_online_users,
 };
 
+fn create_room_joined_message(ticket: &str) -> String {
+    format!(
+        "✅ Successfully joined room!\n\nYou can share this room token with others:\n\n[COPY TOKEN BELOW]\n{}\n[END TOKEN]\n\nInstructions: Select and copy the text between the brackets to share with others.",
+        ticket
+    )
+}
+
+fn create_room_created_message(ticket: &str) -> String {
+    format!(
+        "🎫 Room created successfully!\n\nShare this invitation token with others to join:\n\n[COPY TOKEN BELOW]\n{}\n[END TOKEN]\n\nInstructions: Select and copy the text between the brackets to share with others.",
+        ticket
+    )
+}
+
 pub async fn join_room(
     username: String,
     ticket_str: String,
@@ -59,10 +73,7 @@ pub async fn join_room(
             chat.set_connection_status(SharedString::from("Connected"));
 
             // Add system message with room token for joined clients
-            let ticket_message = format!(
-                "✅ Successfully joined room!\n\nYou can share this room token with others:\n\n[COPY TOKEN BELOW]\n{}\n[END TOKEN]\n\nInstructions: Select and copy the text between the brackets to share with others.",
-                ticket_str_for_ui
-            );
+            let ticket_message = create_room_joined_message(&ticket_str_for_ui);
             let system_message = types::ChatMessage {
                 username: SharedString::from("System"),
                 content: SharedString::from(ticket_message),
@@ -153,10 +164,7 @@ pub async fn create_room(
             chat.set_connection_status(SharedString::from("Connected"));
 
             // Add system message with room ticket
-            let ticket_message = format!(
-                "🎫 Room created successfully!\n\nShare this invitation token with others to join:\n\n[COPY TOKEN BELOW]\n{}\n[END TOKEN]\n\nInstructions: Select and copy the text between the brackets to share with others.",
-                room_ticket_for_ui
-            );
+            let ticket_message = create_room_created_message(&room_ticket_for_ui);
             let system_message = types::ChatMessage {
                 username: SharedString::from("System"),
                 content: SharedString::from(ticket_message),
