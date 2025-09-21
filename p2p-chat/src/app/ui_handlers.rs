@@ -7,33 +7,20 @@ pub fn update_messages_and_clear_input(
     chat_handle: &Weak<types::ChatWindow>,
     app_state: &Arc<Mutex<AppState>>,
 ) {
+    update_messages(chat_handle, app_state);
+
     let chat_handle_clone = chat_handle.clone();
-    let app_state_clone = app_state.clone();
 
     match slint::invoke_from_event_loop(move || {
         if let Some(chat) = chat_handle_clone.upgrade() {
-            let state = app_state_clone.lock().unwrap();
-            let messages = state.messages.lock().unwrap();
-
-            println!(
-                "DEBUG: Updating GUI with {} messages and clearing input",
-                messages.len()
-            );
-
-            // Update messages first
-            let messages_model = VecModel::from(messages.clone());
-            chat.set_messages(ModelRc::new(messages_model));
-
-            // Then clear the input
             chat.set_current_message("".into());
-
-            println!("DEBUG: Messages updated and input cleared in GUI successfully");
+            println!("DEBUG: Input cleared in GUI successfully");
         } else {
-            println!("DEBUG: Chat window handle is invalid, cannot update messages or clear input");
+            println!("DEBUG: Chat window handle is invalid, cannot clear input");
         }
     }) {
         Ok(_) => {}
-        Err(e) => println!("ERROR: Failed to invoke UI update from event loop: {:?}", e),
+        Err(e) => println!("ERROR: Failed to clear input from event loop: {:?}", e),
     }
 }
 
