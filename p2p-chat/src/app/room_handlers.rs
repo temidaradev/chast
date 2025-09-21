@@ -38,7 +38,6 @@ pub async fn join_room(
     let (sender, receiver, endpoint, router, _ticket) =
         setup_networking(Some(ticket), username.clone()).await?;
 
-    // Update app state
     {
         let mut state = app_state.lock().unwrap();
         state.sender = Some(sender);
@@ -48,7 +47,6 @@ pub async fn join_room(
         state.router = Some(router);
     }
 
-    // Start message handling
     let chat_handle_clone = chat_handle.clone();
     let app_state_clone = app_state.clone();
     tokio::spawn(async move {
@@ -57,10 +55,8 @@ pub async fn join_room(
         }
     });
 
-    // Update online users list
     update_online_users(&chat_handle, &app_state);
 
-    // Update UI and show chat window - must run on main thread
     let chat_handle_for_ui = chat_handle.clone();
     let join_handle_for_ui = join_handle.clone();
     let username_for_ui = username.clone();
@@ -72,7 +68,6 @@ pub async fn join_room(
             chat.set_current_username(SharedString::from(username_for_ui.clone()));
             chat.set_connection_status(SharedString::from("Connected"));
 
-            // Add system message with room token for joined clients
             let ticket_message = create_room_joined_message(&ticket_str_for_ui);
             let system_message = types::ChatMessage {
                 username: SharedString::from("System"),
@@ -82,14 +77,12 @@ pub async fn join_room(
                 is_system: true,
             };
 
-            // Add to shared messages vector
             {
                 let state = app_state_for_ui.lock().unwrap();
                 let mut messages = state.messages.lock().unwrap();
                 messages.push(system_message.clone());
             }
 
-            // Update the UI messages directly
             let current_messages = {
                 let state = app_state_for_ui.lock().unwrap();
                 let messages = state.messages.lock().unwrap();
@@ -125,7 +118,6 @@ pub async fn create_room(
     println!("DEBUG: setup_networking returned successfully");
     println!("Networking setup complete");
 
-    // Update app state
     {
         let mut state = app_state.lock().unwrap();
         state.sender = Some(sender);
@@ -136,7 +128,6 @@ pub async fn create_room(
     }
     println!("App state updated");
 
-    // Start message handling
     let chat_handle_clone = chat_handle.clone();
     let app_state_clone = app_state.clone();
     tokio::spawn(async move {
@@ -146,10 +137,8 @@ pub async fn create_room(
     });
     println!("Message handler started");
 
-    // Update online users list
     update_online_users(&chat_handle, &app_state);
 
-    // Update UI and show chat window - must run on main thread
     let chat_handle_for_ui = chat_handle.clone();
     let create_handle_for_ui = create_handle.clone();
     let username_for_ui = username.clone();
@@ -163,7 +152,6 @@ pub async fn create_room(
             chat.set_current_username(SharedString::from(username_for_ui.clone()));
             chat.set_connection_status(SharedString::from("Connected"));
 
-            // Add system message with room ticket
             let ticket_message = create_room_created_message(&room_ticket_for_ui);
             let system_message = types::ChatMessage {
                 username: SharedString::from("System"),
@@ -173,14 +161,12 @@ pub async fn create_room(
                 is_system: true,
             };
 
-            // Add to shared messages vector
             {
                 let state = app_state_for_ui.lock().unwrap();
                 let mut messages = state.messages.lock().unwrap();
                 messages.push(system_message.clone());
             }
 
-            // Update the UI messages directly
             let current_messages = {
                 let state = app_state_for_ui.lock().unwrap();
                 let messages = state.messages.lock().unwrap();

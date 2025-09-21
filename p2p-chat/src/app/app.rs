@@ -54,7 +54,6 @@ impl App {
         create_handle: &Weak<types::CreateWindow>,
         _chat_handle: &Weak<types::ChatWindow>,
     ) {
-        // StartWindow navigation
         {
             let main_handle_clone = main_handle.clone();
             let join_handle_clone = join_handle.clone();
@@ -63,8 +62,8 @@ impl App {
                     if let (Some(main), Some(join)) =
                         (main_handle_clone.upgrade(), join_handle_clone.upgrade())
                     {
-                        join.show();
-                        main.hide();
+                        let _ = join.show();
+                        let _ = main.hide();
                     }
                 });
             }
@@ -78,14 +77,13 @@ impl App {
                     if let (Some(main), Some(create)) =
                         (main_handle_clone.upgrade(), create_handle_clone.upgrade())
                     {
-                        create.show();
-                        main.hide();
+                        let _ = create.show();
+                        let _ = main.hide();
                     }
                 });
             }
         }
 
-        // JoinWindow back navigation
         {
             let main_handle_clone = main_handle.clone();
             let join_handle_clone = join_handle.clone();
@@ -94,14 +92,13 @@ impl App {
                     if let (Some(main), Some(join)) =
                         (main_handle_clone.upgrade(), join_handle_clone.upgrade())
                     {
-                        main.show();
-                        join.hide();
+                        let _ = main.show();
+                        let _ = join.hide();
                     }
                 });
             }
         }
 
-        // CreateWindow back navigation
         {
             let main_handle_clone = main_handle.clone();
             let create_handle_clone = create_handle.clone();
@@ -110,8 +107,8 @@ impl App {
                     if let (Some(main), Some(create)) =
                         (main_handle_clone.upgrade(), create_handle_clone.upgrade())
                     {
-                        main.show();
-                        create.hide();
+                        let _ = main.show();
+                        let _ = create.hide();
                     }
                 });
             }
@@ -126,7 +123,6 @@ impl App {
         app_state: Arc<Mutex<AppState>>,
         rt_handle: tokio::runtime::Handle,
     ) {
-        // Join room callback
         {
             let app_state_clone = app_state.clone();
             let chat_handle_clone = chat_handle.clone();
@@ -153,7 +149,6 @@ impl App {
             }
         }
 
-        // Create room callback
         {
             let app_state_clone = app_state.clone();
             let chat_handle_clone = chat_handle.clone();
@@ -178,7 +173,6 @@ impl App {
             }
         }
 
-        // Send message callback
         {
             let app_state_clone = app_state.clone();
             let chat_handle_clone = chat_handle.clone();
@@ -195,7 +189,6 @@ impl App {
                         match send_message(message.clone(), app_state.clone()).await {
                             Ok(_) => {
                                 println!("DEBUG: Message sent successfully, updating UI");
-                                // Update GUI after sending message
                                 update_messages(&chat_handle, &app_state);
                             }
                             Err(e) => {
@@ -207,10 +200,9 @@ impl App {
             }
         }
 
-        // Disconnect callback
         {
             let app_state_clone = app_state.clone();
-            let main_handle_clone = main_handle.clone(); // Use main window for navigation back
+            let main_handle_clone = main_handle.clone();
             let chat_handle_clone = chat_handle.clone();
             let rt_handle_clone = rt_handle.clone();
 
@@ -221,7 +213,6 @@ impl App {
                     let chat_handle = chat_handle_clone.clone();
 
                     rt_handle_clone.spawn(async move {
-                        // Clean up networking without holding lock across await
                         let router = {
                             let mut state = app_state.lock().unwrap();
                             let router = state.router.take();
@@ -239,7 +230,6 @@ impl App {
                             }
                         }
 
-                        // Navigate back to start screen
                         match slint::invoke_from_event_loop(move || {
                             if let Some(chat) = chat_handle.upgrade() {
                                 if let Some(main) = main_handle.upgrade() {

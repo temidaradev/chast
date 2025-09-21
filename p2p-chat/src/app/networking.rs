@@ -41,16 +41,12 @@ pub async fn setup_networking(
         .accept(iroh_gossip::ALPN, gossip.clone())
         .spawn();
 
-    // Wait for the endpoint to be ready and establish relay connections
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     let ticket = {
-        // Create a node address with complete addressing information
         let mut node_addr = iroh::NodeAddr::new(endpoint.node_id());
 
-        // Add relay URLs from the discovery service
         if let Some(_discovery) = endpoint.discovery() {
-            // Get relay URLs from the n0 discovery service
             let relay_url = DEFAULT_RELAY_URL.parse().expect("Invalid relay URL");
             node_addr = node_addr.with_relay_url(relay_url);
         }
@@ -71,7 +67,6 @@ pub async fn setup_networking(
         println!("> connected!");
         println!("DEBUG: About to send AboutMe message");
 
-        // Send initial AboutMe message
         let message = Message::new(MessageBody::AboutMe {
             from: endpoint.node_id(),
             name: username,
@@ -82,14 +77,12 @@ pub async fn setup_networking(
 
         Ok((sender, receiver, endpoint, router, ticket))
     } else {
-        // For creating a new room, just subscribe without nodes
         println!("> creating new room, subscribing to topic...");
         let subscription = gossip.subscribe(topic, vec![]).await?;
         let (sender, receiver) = subscription.split();
         println!("> connected!");
         println!("DEBUG: About to send AboutMe message");
 
-        // Send initial AboutMe message
         let message = Message::new(MessageBody::AboutMe {
             from: endpoint.node_id(),
             name: username,
@@ -111,14 +104,12 @@ pub async fn handle_messages(
         if let Event::Received(msg) = event {
             match Message::from_bytes(&msg.content)?.body {
                 MessageBody::AboutMe { from, name } => {
-                    // Update names map
                     {
                         let state = app_state.lock().unwrap();
                         let mut names = state.names.lock().unwrap();
                         names.insert(from, name.clone());
                     }
 
-                    // Update online users in UI
                     crate::app::ui_handlers::update_online_users(&chat_handle, &app_state);
 
                     println!("> {} is now known as {}", from.fmt_short(), name);
@@ -134,7 +125,6 @@ pub async fn handle_messages(
                         (sender_name, is_own)
                     };
 
-                    // Add message to UI
                     let new_message = types::ChatMessage {
                         username: SharedString::from(sender_name.clone()),
                         content: SharedString::from(text.clone()),
@@ -145,14 +135,12 @@ pub async fn handle_messages(
                         is_system: false,
                     };
 
-                    // Add to shared messages vector
                     {
                         let state = app_state.lock().unwrap();
                         let mut messages = state.messages.lock().unwrap();
                         messages.push(new_message);
                     }
 
-                    // Update the UI model
                     update_messages(&chat_handle, &app_state);
                     println!(
                         "DEBUG: Message added to GUI - from {}: {}",
@@ -176,7 +164,6 @@ pub async fn send_message(message: String, app_state: Arc<Mutex<AppState>>) -> R
     };
 
     if let (Some(sender), Some(node_id)) = (sender, node_id) {
-        // Add message to local chat immediately
         let new_message = types::ChatMessage {
             username: SharedString::from(username),
             content: SharedString::from(message.clone()),
@@ -185,14 +172,12 @@ pub async fn send_message(message: String, app_state: Arc<Mutex<AppState>>) -> R
             is_system: false,
         };
 
-        // Add to shared messages vector
         {
             let state = app_state.lock().unwrap();
             let mut messages = state.messages.lock().unwrap();
             messages.push(new_message);
         }
 
-        // Broadcast to other peers
         let msg = Message::new(MessageBody::Message {
             from: node_id,
             text: message,
