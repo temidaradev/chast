@@ -1,77 +1,93 @@
-# P2P Chat in Rust
+# Chast - P2P Chat Application
 
-A lightweight peer-to-peer CLI chat application written in Rust. It allows users to create and join chat rooms without relying on a central server.
+**Welcome to Chast!** A modern, peer-to-peer chat application built with Rust that lets you create secure, direct connections with friends without needing any central servers.
 
-## Requirements
+## What you'll need
 
-- [Rust](https://www.rust-lang.org/) (latest stable version recommended)
-- Cargo (comes bundled with Rust)
-- A terminal or shell to run the commands
-- Internet connection for peers to connect with each other
+Make sure you have:
 
-## Installation
+- **Rust** - The latest stable version ([get it here](https://www.rust-lang.org/))
+- **An internet connection** - For initial peer discovery (then it's all direct!)
+- **A friend to chat with** - Because chatting alone isn't as fun 😄
 
-Clone the repository:
+## Getting started
 
-```sh
-git clone https://github.com/temidaradev/rust-p2p-chat.git
-cd rust-p2p-chat
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/temidaradev/p2p-vpn-rust.git
+cd p2p-vpn-rust
 ```
 
-Or install from release:
+### 2. Build it
 
-[v0.1](https://github.com/temidaradev/rust-p2p-chat/releases/tag/v0.1)
-
-Build the project:
-
-```sh
+```bash
 cargo build --release
 ```
 
-The compiled binary will be available at: `target/release/p2p-chat`
+_Grab a coffee - this might take a few minutes the first time as Rust downloads and compiles all dependencies..._
 
-You can run it directly: `./target/release/p2p-chat --help`
+### 3. Run it
 
-Or continue from [Usage](https://github.com/temidaradev/rust-p2p-chat/blob/main/README.md#usage)
-
-## How it works
-
-- One user opens a chat room and receives a unique ticket.
-- Other users use this ticket to connect directly to the host.
-- Messages are exchanged peer-to-peer in real time.
-
-## Usage
-
-Start a new chat room:
-
-```sh
-cargo run -- --name user1 open
+```bash
+cargo run --bin p2p-chat
 ```
 
-This will generate a ticket that you can share with others.
+That's it!
 
-Join an existing chat room (replace <ticket> with the one provided):
+## How to use
 
-```sh
-cargo run -- --name user2 join <ticket>
-```
+### Starting a chat room
 
-For the exe:
+1. Run the application
+2. Click "**Create Room**"
+3. Enter your username
+4. Click "**Create**"
+5. **Copy the ticket** this is your room's "ticket"
+6. Share this ticket with friends you want to chat with!
 
-This will start the room:
+### Joining someone's room
 
-```sh
-./p2p-vpn.exe --name user1 open
-```
+1. Get a ticket from a friend
+2. Run the application
+3. Click "**Join Room**"
+4. Enter your username
+5. Paste the ticket
+6. Click "**Join**"
+7. Start chatting!
 
-And with this you can join to a room:
+## How it works under the hood
 
-```sh
-./p2p-vpn.exe --name user2 join <ticket>
-```
+Curious about the magic? Here's the simplified version:
 
-Now both users are connected directly and can chat in real time.
+1. **Room Creation**: When you create a room, your computer becomes a "host" with a unique network address
+2. **Ticket Generation**: The app creates a special "ticket" containing your network address and a secret room ID
+3. **Direct Connection**: When someone uses your ticket, their app connects directly to yours
+4. **Peer-to-Peer**: From then on, messages flow directly between devices using [Iroh](https://iroh.computer/)
 
-Test:
+No servers, no data collection, no corporate oversight
 
-[Screencast_20250822_225853.webm](https://github.com/user-attachments/assets/1325c830-45b2-4e6a-bf31-a450a923bb86)
+## Project structure
+
+This is a Rust workspace with several components:
+
+- **`p2p-chat/`** - The main GUI application (what you actually run)
+- **`messaging/`** - Message format and serialization logic
+- **`ticket/`** - Room "ticket" encoding/decoding
+- **`target/`** - Compiled binaries (created when you build)
+
+## Contributing
+
+Found a bug? Have an idea? Contributions are welcome! Feel free to:
+
+- Open an issue for bugs or feature requests
+- Submit a pull request with improvements
+- Share feedback on the user experience
+
+## Why "Chast"?
+
+**Chat** + **Rust** = **Chast**
+
+---
+
+_Built with ❤️ in Rust. by temidaradev!_ 🦀
