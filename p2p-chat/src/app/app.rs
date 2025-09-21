@@ -224,11 +224,10 @@ impl App {
                             router
                         };
 
-                        if let Some(router) = router {
-                            if let Err(e) = router.shutdown().await {
+                        if let Some(router) = router
+                            && let Err(e) = router.shutdown().await {
                                 eprintln!("Error shutting down router: {}", e);
                             }
-                        }
 
                         match slint::invoke_from_event_loop(move || {
                             if let Some(chat) = chat_handle.upgrade() {

@@ -17,6 +17,12 @@ pub struct AppState {
     pub messages: Arc<Mutex<Vec<types::ChatMessage>>>,
 }
 
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppState {
     pub fn new() -> Self {
         Self {

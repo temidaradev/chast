@@ -104,10 +104,43 @@ pub async fn handle_messages(
         if let Event::Received(msg) = event {
             match Message::from_bytes(&msg.content)?.body {
                 MessageBody::AboutMe { from, name } => {
+                    // Check if this is a new user (not already in our names list)
+                    let is_new_user = {
+                        let state = app_state.lock().unwrap();
+                        let names = state.names.lock().unwrap();
+                        !names.contains_key(&from)
+                    };
+
+                    // Add the user to our names list
                     {
                         let state = app_state.lock().unwrap();
                         let mut names = state.names.lock().unwrap();
                         names.insert(from, name.clone());
+                    }
+
+                    if is_new_user {
+                        let (sender, current_node_id, current_username) = {
+                            let state = app_state.lock().unwrap();
+                            (
+                                state.sender.clone(),
+                                state.current_node_id,
+                                state.current_username.clone(),
+                            )
+                        };
+
+                        if let (Some(sender), Some(current_node_id)) = (sender, current_node_id) {
+                            let response_message = Message::new(MessageBody::AboutMe {
+                                from: current_node_id,
+                                name: current_username,
+                            });
+
+                            if let Err(e) = sender.broadcast(response_message.to_vec().into()).await
+                            {
+                                eprintln!("Failed to send AboutMe response: {}", e);
+                            } else {
+                                println!("DEBUG: Sent AboutMe response to new user {}", name);
+                            }
+                        }
                     }
 
                     crate::app::ui_handlers::update_online_users(&chat_handle, &app_state);
@@ -121,7 +154,7 @@ pub async fn handle_messages(
                         let sender_name = names
                             .get(&from)
                             .map_or_else(|| from.fmt_short(), String::to_string);
-                        let is_own = state.current_node_id.map_or(false, |id| id == from);
+                        let is_own = state.current_node_id == Some(from);
                         (sender_name, is_own)
                     };
 
