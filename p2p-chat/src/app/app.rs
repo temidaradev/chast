@@ -1,6 +1,6 @@
 use anyhow::Result;
 use slint::{ComponentHandle, Weak};
-use std::{sync::{Arc, Mutex}, time::Duration};
+use std::{sync::{Arc, Mutex}};
 
 use crate::app::{
     app_state::AppState,
