@@ -12,6 +12,7 @@ pub struct Message {
 pub enum MessageBody {
     AboutMe { from: NodeId, name: String },
     Message { from: NodeId, text: String },
+    Disconnect { from: NodeId, name: String },
 }
 
 impl Message {

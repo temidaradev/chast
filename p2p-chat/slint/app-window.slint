@@ -392,17 +392,7 @@ export component ChatWindow inherits Window {
                         if (current-message != "") {
                             send-message(current-message);
                             current-message = "";
-                        }
-                    }
-                }
-                
-                Button {
-                    text: "Send";
-                    width: 80px;
-                    clicked => {
-                        if (current-message != "") {
-                            send-message(current-message);
-                            current-message = "";
+                            self.text = "";
                         }
                     }
                 }

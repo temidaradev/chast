@@ -7,7 +7,7 @@ use slint::{SharedString, Weak};
 use std::sync::{Arc, Mutex};
 use ticket::*;
 
-use crate::app::{app_state::AppState, types, ui_handlers::update_messages};
+use crate::app::{app_state::AppState, types, ui_handlers::{update_messages, handle_user_disconnect, handle_user_connect}};
 
 const DEFAULT_RELAY_URL: &str = "https://relay.iroh.link";
 
@@ -103,15 +103,12 @@ pub async fn handle_messages(
     while let Some(event) = receiver.try_next().await? {
         if let Event::Received(msg) = event {
             match Message::from_bytes(&msg.content)?.body {
-                MessageBody::AboutMe { from, name } => {
-                    // Check if this is a new user (not already in our names list)
-                    let is_new_user = {
+                MessageBody::AboutMe { from, name } => {                    let is_new_user = {
                         let state = app_state.lock().unwrap();
                         let names = state.names.lock().unwrap();
                         !names.contains_key(&from)
                     };
 
-                    // Add the user to our names list
                     {
                         let state = app_state.lock().unwrap();
                         let mut names = state.names.lock().unwrap();
@@ -119,6 +116,8 @@ pub async fn handle_messages(
                     }
 
                     if is_new_user {
+                        handle_user_connect(&chat_handle, &app_state, &name);
+
                         let (sender, current_node_id, current_username) = {
                             let state = app_state.lock().unwrap();
                             (
@@ -146,6 +145,17 @@ pub async fn handle_messages(
                     crate::app::ui_handlers::update_online_users(&chat_handle, &app_state);
 
                     println!("> {} is now known as {}", from.fmt_short(), name);
+                }
+                MessageBody::Disconnect { from, name } => {
+                    {
+                        let state = app_state.lock().unwrap();
+                        let mut names = state.names.lock().unwrap();
+                        names.remove(&from);
+                    }
+
+                    handle_user_disconnect(&chat_handle, &app_state, &name);
+
+                    println!("> {} ({}) disconnected", name, from.fmt_short());
                 }
                 MessageBody::Message { from, text } => {
                     let (sender_name, is_own) = {
@@ -216,6 +226,28 @@ pub async fn send_message(message: String, app_state: Arc<Mutex<AppState>>) -> R
             text: message,
         });
         sender.broadcast(msg.to_vec().into()).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn send_disconnect(app_state: Arc<Mutex<AppState>>) -> Result<()> {
+    let (sender, node_id, username) = {
+        let state = app_state.lock().unwrap();
+        (
+            state.sender.clone(),
+            state.current_node_id,
+            state.current_username.clone(),
+        )
+    };
+
+    if let (Some(sender), Some(node_id)) = (sender, node_id) {
+        let msg = Message::new(MessageBody::Disconnect {
+            from: node_id,
+            name: username,
+        });
+        sender.broadcast(msg.to_vec().into()).await?;
+        println!("DEBUG: Disconnect message sent");
     }
 
     Ok(())

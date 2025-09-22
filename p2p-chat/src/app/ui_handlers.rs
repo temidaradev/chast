@@ -3,6 +3,56 @@ use std::sync::{Arc, Mutex};
 
 use crate::app::{app_state::AppState, types};
 
+pub fn handle_user_connect(
+    chat_handle: &Weak<types::ChatWindow>,
+    app_state: &Arc<Mutex<AppState>>,
+    username: &str,
+) {
+    let connect_message = types::ChatMessage {
+        username: SharedString::from("System"),
+        content: SharedString::from(format!("🎉 {} joined the room", username)),
+        timestamp: SharedString::from(chrono::Local::now().format("%H:%M").to_string()),
+        is_own: false,
+        is_system: true,
+    };
+
+    {
+        let state = app_state.lock().unwrap();
+        let mut messages = state.messages.lock().unwrap();
+        messages.push(connect_message);
+    }
+
+    update_messages(chat_handle, app_state);
+    update_online_users(chat_handle, app_state);
+    
+    println!("DEBUG: User {} connected, UI updated", username);
+}
+
+pub fn handle_user_disconnect(
+    chat_handle: &Weak<types::ChatWindow>,
+    app_state: &Arc<Mutex<AppState>>,
+    username: &str,
+) {
+    let disconnect_message = types::ChatMessage {
+        username: SharedString::from("System"),
+        content: SharedString::from(format!("👋 {} disconnected", username)),
+        timestamp: SharedString::from(chrono::Local::now().format("%H:%M").to_string()),
+        is_own: false,
+        is_system: true,
+    };
+
+    {
+        let state = app_state.lock().unwrap();
+        let mut messages = state.messages.lock().unwrap();
+        messages.push(disconnect_message);
+    }
+
+    update_messages(chat_handle, app_state);
+    update_online_users(chat_handle, app_state);
+    
+    println!("DEBUG: User {} disconnected, UI updated", username);
+}
+
 pub fn update_messages_and_clear_input(
     chat_handle: &Weak<types::ChatWindow>,
     app_state: &Arc<Mutex<AppState>>,

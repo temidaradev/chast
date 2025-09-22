@@ -4,7 +4,7 @@ use std::{sync::{Arc, Mutex}};
 
 use crate::app::{
     app_state::AppState,
-    networking::send_message,
+    networking::{send_message, send_disconnect},
     room_handlers::{create_room, join_room},
     types,
     ui_handlers::update_messages,
@@ -217,6 +217,12 @@ impl App {
                     let chat_handle = chat_handle_clone.clone();
 
                     rt_handle_clone.spawn(async move {
+                        if let Err(e) = send_disconnect(app_state.clone()).await {
+                            eprintln!("Error sending disconnect message: {}", e);
+                        }
+
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
                         let router = {
                             let mut state = app_state.lock().unwrap();
                             let router = state.router.take();
