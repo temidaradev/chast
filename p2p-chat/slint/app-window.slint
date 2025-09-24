@@ -8,6 +8,14 @@ export struct ChatMessage {
     is-system: bool,
 }
 
+export struct ChatFileItem {
+    file_path: string,
+    display_name: string,
+    last_modified: string,
+    size_display: string,
+    selected: bool,
+}
+
 export component StartWindow inherits Window {
     title: "Chast - P2P Chat";
     width: 800px;
@@ -202,6 +210,135 @@ export component CreateWindow inherits Window {
     }
 }
 
+export component ChatSaveDialog inherits Dialog {
+    in property <[ChatFileItem]> saved_chats;
+    in property <string> save_status: "";
+    
+    callback restore_chat_selected(string /* file_path */);
+    callback open_file_explorer();
+    callback auto_save_toggled(bool);
+    callback close_dialog();
+
+    preferred-width: 600px;
+    preferred-height: 500px;
+    
+    VerticalBox {
+        spacing: 10px;
+        
+        Text {
+            text: "Chat Save & Restore";
+            font-size: 18px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            color: white;
+        }
+        
+        HorizontalBox {
+            spacing: 10px;
+            alignment: center;
+            
+            Text { 
+                text: "Auto-save chats:"; 
+                vertical-alignment: center;
+                color: white;
+            }
+            
+            Button {
+                text: "📁 Browse Files...";
+                clicked => {
+                    root.open_file_explorer();
+                }
+            }
+        }
+        
+        if save_status != "" : Text {
+            text: save_status;
+            color: #00ff88;
+            horizontal-alignment: center;
+        }
+        
+        Rectangle {
+            background: #2a2a2a;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #444;
+            
+            VerticalBox {
+                padding: 10px;
+                
+                Text {
+                    text: "Recent Saved Chats";
+                    font-weight: 700;
+                    color: white;
+                    font-size: 14px;
+                }
+                
+                ScrollView {
+                    height: 300px;
+                    
+                    VerticalBox {
+                        spacing: 5px;
+                        
+                        for chat_file in saved_chats : Rectangle {
+                            background: chat_file.selected ? #00ff8822 : #333;
+                            border-radius: 4px;
+                            height: 80px;
+                            
+                            HorizontalBox {
+                                padding: 10px;
+                                spacing: 15px;
+                                
+                                VerticalBox {
+                                    spacing: 2px;
+                                    
+                                    Text {
+                                        text: chat_file.display_name;
+                                        font-weight: 600;
+                                        color: white;
+                                        font-size: 12px;
+                                    }
+                                    
+                                    Text {
+                                        text: "📅 " + chat_file.last_modified;
+                                        font-size: 10px;
+                                        color: #888;
+                                    }
+                                    
+                                    Text {
+                                        text: "💾 " + chat_file.size_display;
+                                        font-size: 10px;
+                                        color: #888;
+                                    }
+                                }
+                                
+                                Button {
+                                    text: "🔄 Restore";
+                                    preferred-width: 100px;
+                                    clicked => {
+                                        root.restore_chat_selected(chat_file.file_path);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        HorizontalBox {
+            spacing: 10px;
+            alignment: end;
+            
+            Button {
+                text: "Close";
+                clicked => {
+                    root.close_dialog();
+                }
+            }
+        }
+    }
+}
+
 export component ChatWindow inherits Window {
     width: 800px;
     height: 600px;
@@ -210,12 +347,20 @@ export component ChatWindow inherits Window {
     
     callback send-message(string /* message */);
     callback disconnect();
+    callback show-chat-save-dialog();
+    callback restore-chat-from-path(string);
+    callback open-file-explorer-for-restore();
+    callback toggle-auto-save(bool);
+    callback refresh-saved-chats();
     
     in-out property<string> current-message: "";
     in-out property<string> current-username: "";
     in-out property<string> connection-status: "Disconnected";
     in-out property<[ChatMessage]> messages: [];
     in-out property<[string]> online-users: [];
+    in-out property<bool> show-save-dialog: false;
+    in property<[ChatFileItem]> saved-chats: [];
+    in property<string> save-status: "";
     
     HorizontalBox {
         spacing: 10px;
@@ -295,6 +440,37 @@ export component ChatWindow inherits Window {
                                 color: white;
                                 vertical-alignment: center;
                                 horizontal-alignment: center;
+                            }
+                        }
+                    }
+                    
+                    Rectangle {
+                        width: 85px;
+                        height: 28px;
+                        background: #444;
+                        border-radius: 14px;
+                        y: (parent.height - self.height) / 2;
+                        
+                        TouchArea {
+                            clicked => { 
+                                refresh-saved-chats();
+                                show-save-dialog = true;
+                            }
+                            
+                            Rectangle {
+                                width: 100%;
+                                height: 100%;
+                                background: parent.pressed ? #555 : parent.has-hover ? #4a4a4a : transparent;
+                                border-radius: 14px;
+                                
+                                Text {
+                                    text: "💾 Save";
+                                    color: #00ff88;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
                             }
                         }
                     }
@@ -397,6 +573,28 @@ export component ChatWindow inherits Window {
                     }
                 }
             }
+        }
+    }
+    
+    if show-save-dialog : ChatSaveDialog {
+        saved-chats: root.saved-chats;
+        save-status: root.save-status;
+        
+        restore-chat-selected(file-path) => {
+            root.restore-chat-from-path(file-path);
+            root.show-save-dialog = false;
+        }
+        
+        open-file-explorer() => {
+            root.open-file-explorer-for-restore();
+        }
+        
+        auto-save-toggled(enabled) => {
+            root.toggle-auto-save(enabled);
+        }
+        
+        close-dialog() => {
+            root.show-save-dialog = false;
         }
     }
 }

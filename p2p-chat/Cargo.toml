@@ -16,6 +16,7 @@ rand = { workspace = true }
 messaging = { workspace = true }
 ticket = { workspace = true }
 chrono = { workspace = true }
+rfd = { workspace = true }
 
 [build-dependencies]
 slint-build = { workspace = true }

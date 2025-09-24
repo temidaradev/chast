@@ -1,0 +1,20 @@
+{
+  "session_id": "session_1758738697",
+  "participants": [],
+  "messages": [
+    {
+      "sender": "System",
+      "content": "🎫 Room created successfully!\n\nShare this invitation token with others to join:\n\n[COPY TOKEN BELOW]\npmrhi33qnfrseos3guwdcmrmgi2dklbsgeycymjxhewdoobmhe3cymrrgewdemryfq4dmlbxg4wdcmzzfqytqnrmge3tclbrga3cymrtgywdenbzfq3symrrhawdinjmgizdolbrgi4cymjqfqytelbrgqysymjygawdcnbqfq2dilbrgi3cynbwfqytmmzmgq4v2lbcnzxwizltei5fw6zcnzxwizk7nfsceorcmrqtgzbsgeytimjtmfrwmnzrgu3deytdgvsdmnzume2ggzbsmiztkyrqhe3tszjugzsgkmddha4winjvgeztiytfha3tgzjxmy2demzcfqrhezlmmf4v65lsnqrduitior2ha4z2f4xxezlmmf4s42lsn5uc43djnzvs4lzcfqrgi2lsmvrxix3bmrshezltonsxgir2lnox2xl5\n[END TOKEN]\n\nInstructions: Select and copy the text between the brackets to share with others.",
+      "timestamp": "2025-09-24T18:31:37.121377352Z",
+      "message_type": "System"
+    },
+    {
+      "sender": "asd",
+      "content": "heil",
+      "timestamp": "2025-09-24T18:31:37.121378732Z",
+      "message_type": "Text"
+    }
+  ],
+  "created_at": "2025-09-24T18:31:37.121380522Z",
+  "last_updated": "2025-09-24T18:31:37.121380642Z"
+}
