@@ -13,6 +13,7 @@ pub struct AppState {
     pub router: Option<Router>,
     pub current_username: String,
     pub current_node_id: Option<NodeId>,
+    pub current_session_token: Option<String>,
     pub names: Arc<Mutex<HashMap<NodeId, String>>>,
     pub messages: Arc<Mutex<Vec<types::ChatMessage>>>,
 }
@@ -31,6 +32,7 @@ impl AppState {
             router: None,
             current_username: String::new(),
             current_node_id: None,
+            current_session_token: None,
             names: Arc::new(Mutex::new(HashMap::new())),
             messages: Arc::new(Mutex::new(Vec::<types::ChatMessage>::new())),
         }

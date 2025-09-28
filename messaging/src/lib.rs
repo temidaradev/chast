@@ -8,11 +8,20 @@ pub struct Message {
     nonce: [u8; 16],
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum MessageBody {
     AboutMe { from: NodeId, name: String },
     Message { from: NodeId, text: String },
     Disconnect { from: NodeId, name: String },
+    MessageHistory { messages: Vec<StoredMessage> },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StoredMessage {
+    pub from: NodeId,
+    pub sender_name: String,
+    pub text: String,
+    pub timestamp: String,
 }
 
 impl Message {

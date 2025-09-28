@@ -3,3 +3,4 @@
 .DS_Store
 .env
 /saved_chats
+server_message_history.json

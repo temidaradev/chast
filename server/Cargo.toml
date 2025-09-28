@@ -6,8 +6,11 @@ edition = "2024"
 [dependencies]
 iroh = { workspace = true }
 iroh-gossip = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
 rand = { workspace = true }
-serde = { workspace = true }
+chrono = { workspace = true }
+futures-lite = { workspace = true }
+messaging = { path = "../messaging" }
+ticket = { path = "../ticket" }
 serde_json = { workspace = true }

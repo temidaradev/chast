@@ -13,17 +13,15 @@ use crate::app::{
     ui_handlers::update_online_users,
 };
 
-fn create_room_joined_message(ticket: &str) -> String {
+fn create_room_joined_message() -> String {
     format!(
-        "✅ Successfully joined room!\n\nYou can share this room token with others:\n\n[COPY TOKEN BELOW]\n{}\n[END TOKEN]\n\nInstructions: Select and copy the text between the brackets to share with others.",
-        ticket
+        "✅ Successfully joined room!\n\nYou can share this room token with others:\n\nCOPY TOKEN FROM THE BUTTON AT THE TOPBAR\n\nInstructions: Select and copy the text between the brackets to share with others.",
     )
 }
 
-fn create_room_created_message(ticket: &str) -> String {
+fn create_room_created_message() -> String {
     format!(
-        "🎫 Room created successfully!\n\nShare this invitation token with others to join:\n\n[COPY TOKEN BELOW]\n{}\n[END TOKEN]\n\nInstructions: Select and copy the text between the brackets to share with others.",
-        ticket
+        "🎫 Room created successfully!\n\nShare this invitation token with others to join:\n\nCOPY TOKEN FROM THE BUTTON AT THE TOPBAR\n\nInstructions: Select and copy the text between the brackets to share with others.",
     )
 }
 
@@ -43,6 +41,7 @@ pub async fn join_room(
         state.sender = Some(sender);
         state.current_username = username.clone();
         state.current_node_id = Some(endpoint.node_id());
+        state.current_session_token = Some(ticket_str.clone());
         state.endpoint = Some(endpoint.clone());
         state.router = Some(router);
     }
@@ -60,7 +59,6 @@ pub async fn join_room(
     let chat_handle_for_ui = chat_handle.clone();
     let join_handle_for_ui = join_handle.clone();
     let username_for_ui = username.clone();
-    let ticket_str_for_ui = ticket_str.clone();
     let app_state_for_ui = app_state.clone();
 
     match slint::invoke_from_event_loop(move || {
@@ -68,7 +66,7 @@ pub async fn join_room(
             chat.set_current_username(SharedString::from(username_for_ui.clone()));
             chat.set_connection_status(SharedString::from("Connected"));
 
-            let ticket_message = create_room_joined_message(&ticket_str_for_ui);
+            let ticket_message = create_room_joined_message();
             let system_message = types::ChatMessage {
                 username: SharedString::from("System"),
                 content: SharedString::from(ticket_message),
@@ -123,6 +121,7 @@ pub async fn create_room(
         state.sender = Some(sender);
         state.current_username = username.clone();
         state.current_node_id = Some(endpoint.node_id());
+        state.current_session_token = Some(room_ticket.to_string());
         state.endpoint = Some(endpoint.clone());
         state.router = Some(router);
     }
@@ -142,7 +141,6 @@ pub async fn create_room(
     let chat_handle_for_ui = chat_handle.clone();
     let create_handle_for_ui = create_handle.clone();
     let username_for_ui = username.clone();
-    let room_ticket_for_ui = room_ticket.to_string();
     let app_state_for_ui = app_state.clone();
 
     match slint::invoke_from_event_loop(move || {
@@ -152,7 +150,7 @@ pub async fn create_room(
             chat.set_current_username(SharedString::from(username_for_ui.clone()));
             chat.set_connection_status(SharedString::from("Connected"));
 
-            let ticket_message = create_room_created_message(&room_ticket_for_ui);
+            let ticket_message = create_room_created_message();
             let system_message = types::ChatMessage {
                 username: SharedString::from("System"),
                 content: SharedString::from(ticket_message),
