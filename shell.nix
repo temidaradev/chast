@@ -1,4 +1,3 @@
-# for a shell.nix or flake devShell
 { pkgs ? import <nixpkgs> {} }:
 pkgs.mkShell {
   buildInputs = [
@@ -11,5 +10,7 @@ pkgs.mkShell {
     pkgs.pango
     pkgs.atk
     pkgs.gdk-pixbuf
+    pkgs.zlib
+    pkgs.qt6.full
   ];
 }
