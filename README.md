@@ -33,6 +33,16 @@ _Grab a coffee - this might take a few minutes the first time as Rust downloads 
 cargo run --bin p2p-chat
 ```
 
+### Server Mode (Optional)
+
+For a more traditional chat experience with message tracking and room management, you can run the server component. This provides additional features beyond pure peer-to-peer communication :3
+
+```bash
+cargo run --bin server
+```
+
+You can also install pre-built executables for both the chat GUI and server from the [releases page](https://github.com/temidaradev/p2p-vpn-rust/releases).
+
 That's it!
 
 ## How to use
@@ -56,6 +66,12 @@ That's it!
 6. Click "**Join**"
 7. Start chatting!
 
+If you want to enter the server im hosting on my server, you can join by pasting this room id into related section:
+
+```
+pmrhi33qnfrseos3ge4dmlbrga4symrrgawdcnrvfqzdeobmgm4synjtfqzdalbrg42cymjtguwdmnzmgiydelbrgazcymjrhewdcmrrfq2dklbsgaycynbrfqzdamzmgi2tglbrg4wdcmjyfqzdknjmgu4cymjvhawdonjmgizdelbxgawdmojmgiydglbrhazcymzwluwce3tpmrsxgir2ln5se3tpmrsv62leei5centgmzsdimbtgu3tqztfg5tdqzjumnrtqobzgm4tkmzxgfqtgmdcgm4wemdbge4tsyrshbsgmntbmfswim3bmzsdgnlemuzdanrqgftcelbcojswyylzl52xe3bchirgq5duobztulzpojswyylzfzuxe33ifzwgs3tlfyxselbcmruxezldorpwczdeojsxg43fomrduw25pvox2
+```
+
 ## How it works under the hood
 
 Curious about the magic? Here's the simplified version:
@@ -67,11 +83,14 @@ Curious about the magic? Here's the simplified version:
 
 No servers, no data collection, no corporate oversight
 
+But using the server option breaks this...
+
 ## Project structure
 
 This is a Rust workspace with several components:
 
 - **`p2p-chat/`** - The main GUI application (what you actually run)
+- **`server/`** - Optional server to break the rules of p2p :3
 - **`messaging/`** - Message format and serialization logic
 - **`ticket/`** - Room "ticket" encoding/decoding
 - **`target/`** - Compiled binaries (created when you build)
