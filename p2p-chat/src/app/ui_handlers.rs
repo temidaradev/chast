@@ -24,7 +24,7 @@ pub fn handle_user_connect(
 
     update_messages(chat_handle, app_state);
     update_online_users(chat_handle, app_state);
-    
+
     println!("DEBUG: User {} connected, UI updated", username);
 }
 
@@ -49,7 +49,7 @@ pub fn handle_user_disconnect(
 
     update_messages(chat_handle, app_state);
     update_online_users(chat_handle, app_state);
-    
+
     println!("DEBUG: User {} disconnected, UI updated", username);
 }
 

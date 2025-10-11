@@ -3,20 +3,30 @@ name = "p2p-chat"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+path = "src/main.rs"
+crate-type = ["cdylib"]
+
 [dependencies]
 slint = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+rand = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 iroh = { workspace = true }
 iroh-gossip = { workspace = true }
 tokio = { workspace = true }
-serde = { workspace = true }
 futures-lite = { workspace = true }
-anyhow = { workspace = true }
-serde_json = { workspace = true }
-rand = { workspace = true }
-messaging = { workspace = true }
-ticket = { workspace = true }
-chrono = { workspace = true }
 rfd = { workspace = true }
+ticket = { workspace = true }
+messaging = { workspace = true }
+chrono = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "0.2" }
+getrandom = { version = "0.3.3", features = ["wasm_js"] }
 
 [build-dependencies]
 slint-build = { workspace = true }
