@@ -1,4 +1,4 @@
-import { Button, VerticalBox, HorizontalBox, LineEdit, TextEdit, ScrollView, ListView } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, LineEdit, TextEdit, ScrollView, ListView, CheckBox } from "std-widgets.slint";
 
 export struct ChatMessage {
     username: string,
@@ -16,291 +16,451 @@ export struct ChatFileItem {
     selected: bool,
 }
 
-export component StartWindow inherits Window {
-    title: "Chast - P2P Chat";
+export struct RoomItem {
+    id: string,
+    name: string,
+    membership: string,
+    role: string,
+    members: int,
+    invite-only: bool,
+}
+
+export struct MemberItem {
+    user-id: string,
+    display-name: string,
+    membership: string,
+    role: string,
+    is-me: bool,
+}
+
+export component AuthWindow inherits Window {
+    title: "Chast - Sign in";
     width: 800px;
     height: 600px;
     background: #1a1a1a;
-    
-    callback switch-to-join-window;
-    callback switch-to-create-window;
-    
-    GridLayout {
-        padding-left: 200px;
-        padding-right: 200px;
-        padding-top: 200px;
-        padding-bottom: 200px;
-        spacing: 20px;
-        
-        Row {
-            Text {
-                text: "Chast";
-                horizontal-alignment: center;
-                font-size: 48px;
-                font-weight: 900;
-                color: #00ff88;
+
+    callback sign-in(string /* ticket */, string /* user */, string /* password */);
+    callback create-account(string /* ticket */, string /* user */, string /* password */);
+    callback start-peer-room(string /* room ticket, empty to create */, string /* display name */);
+
+    in-out property<string> ticket: "";
+    in-out property<string> username: "";
+    in-out property<string> password: "";
+    in-out property<string> status: "";
+    in-out property<bool> busy: false;
+    in-out property<string> peer-name: "";
+    in-out property<string> peer-ticket: "";
+
+    VerticalBox {
+        padding-left: 110px;
+        padding-right: 110px;
+        padding-top: 34px;
+        padding-bottom: 34px;
+        spacing: 10px;
+
+        Text {
+            text: "Chast";
+            horizontal-alignment: center;
+            font-size: 38px;
+            font-weight: 900;
+            color: #00ff88;
+        }
+
+        Text {
+            text: "Sign in to a server for accounts, rooms and saved history";
+            horizontal-alignment: center;
+            font-size: 12px;
+            color: #888;
+        }
+
+        LineEdit {
+            text: ticket;
+            placeholder-text: "Server address from the person running the server";
+            height: 38px;
+            edited(text) => { ticket = text; }
+        }
+
+        LineEdit {
+            text: username;
+            placeholder-text: "Username";
+            height: 38px;
+            edited(text) => { username = text; }
+        }
+
+        LineEdit {
+            text: password;
+            input-type: InputType.password;
+            placeholder-text: "Password";
+            height: 38px;
+            edited(text) => { password = text; }
+            accepted => {
+                if (ticket != "" && username != "" && password != "") {
+                    busy = true;
+                    sign-in(ticket, username, password);
+                }
             }
         }
-        
-        Row {
-            Text {
-                text: "Peer-to-Peer Chat";
-                horizontal-alignment: center;
-                font-size: 16px;
-                color: #888;
+
+        HorizontalBox {
+            spacing: 10px;
+
+            Button {
+                text: busy ? "Working..." : "Sign in";
+                height: 38px;
+                enabled: !busy;
+                clicked => {
+                    if (ticket != "" && username != "" && password != "") {
+                        busy = true;
+                        sign-in(ticket, username, password);
+                    }
+                }
+            }
+
+            Button {
+                text: "Create account";
+                height: 38px;
+                enabled: !busy;
+                clicked => {
+                    if (ticket != "" && username != "" && password != "") {
+                        busy = true;
+                        create-account(ticket, username, password);
+                    }
+                }
             }
         }
-        
-        Row {
-            VerticalBox {
-                spacing: 15px;
-                
-                Button {
-                    text: "Create Room";
-                    height: 50px;
-                    clicked => { switch-to-create-window(); }
-                }
-                
-                Button {
-                    text: "Join Room";
-                    height: 50px;
-                    clicked => { switch-to-join-window(); }
+
+        Rectangle {
+            height: 1px;
+            background: #444;
+        }
+
+        Text {
+            text: "Or chat with no account, straight between devices";
+            horizontal-alignment: center;
+            font-size: 12px;
+            color: #888;
+        }
+
+        LineEdit {
+            text: peer-name;
+            placeholder-text: "Your name";
+            height: 38px;
+            edited(text) => { peer-name = text; }
+        }
+
+        LineEdit {
+            text: peer-ticket;
+            placeholder-text: "Room ticket, leave empty to start a new room";
+            height: 38px;
+            edited(text) => { peer-ticket = text; }
+            accepted => {
+                if (peer-name != "") {
+                    busy = true;
+                    start-peer-room(peer-ticket, peer-name);
                 }
             }
+        }
+
+        HorizontalBox {
+            spacing: 10px;
+
+            Button {
+                text: "Create direct room";
+                height: 38px;
+                enabled: !busy;
+                clicked => {
+                    if (peer-name != "") {
+                        busy = true;
+                        start-peer-room("", peer-name);
+                    }
+                }
+            }
+
+            Button {
+                text: "Join direct room";
+                height: 38px;
+                enabled: !busy;
+                clicked => {
+                    if (peer-name != "" && peer-ticket != "") {
+                        busy = true;
+                        start-peer-room(peer-ticket, peer-name);
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: status;
+            horizontal-alignment: center;
+            font-size: 12px;
+            color: #ffaa00;
+            wrap: word-wrap;
         }
     }
 }
 
-export component JoinWindow inherits Window {
+export component RoomsWindow inherits Window {
+    title: "Chast - Rooms";
     width: 800px;
     height: 600px;
     background: #1a1a1a;
-    title: "Join P2P Chat Room";
-    
-    callback switch-to-chat-window(string /* username */, string /* peer-id */);
-    callback switch-to-start-window;
-    
-    in-out property<string> username: "";
-    in-out property<string> peer-id: "";
-    
-    GridLayout {
-        padding-left: 200px;
-        padding-right: 200px;
-        padding-top: 150px;
-        padding-bottom: 150px;
-        spacing: 25px;
-        
-        Row {
-            Text {
-                text: "Join Room";
-                horizontal-alignment: center;
-                font-size: 32px;
-                color: #0088ff;
-                font-weight: 700;
-            }
-        }
-        
-        Row {
-            LineEdit {
-                text: username;
-                placeholder-text: "Enter your username";
-                horizontal-alignment: center;
-                height: 40px;
-                edited(text) => {
-                    username = text;
+
+    callback open-room(string /* room */);
+    callback create-room(string /* name */, bool /* invite only */);
+    callback refresh();
+    callback sign-out();
+
+    in-out property<[RoomItem]> rooms: [];
+    in-out property<string> user-id: "";
+    in-out property<string> display-name: "";
+    in-out property<string> status: "";
+    in-out property<string> new-room: "";
+    in-out property<bool> new-room-invite-only: true;
+
+    VerticalBox {
+        padding: 18px;
+        spacing: 12px;
+
+        HorizontalBox {
+            alignment: space-between;
+
+            VerticalBox {
+                spacing: 2px;
+                Text {
+                    text: display-name;
+                    font-size: 20px;
+                    font-weight: 700;
+                    color: #00ff88;
+                }
+                Text {
+                    text: user-id;
+                    font-size: 11px;
+                    color: #888;
                 }
             }
-        }
-        
-        Row {
-            LineEdit {
-                text: peer-id;
-                horizontal-alignment: center;
-                placeholder-text: "Enter peer ID or room code";
-                height: 40px;
-                edited(text) => {
-                    peer-id = text;
-                }
-            }
-        }
-        
-        Row {
+
             HorizontalBox {
-                spacing: 10px;
-                
+                spacing: 8px;
                 Button {
-                    text: "Back";
-                    height: 40px;
-                    clicked => { switch-to-start-window(); }
+                    text: "Refresh";
+                    height: 32px;
+                    clicked => { refresh(); }
                 }
-                
                 Button {
-                    text: "Join Room";
-                    height: 40px;
-                    clicked => { 
-                        if (username != "" && peer-id != "") {
-                            switch-to-chat-window(username, peer-id);
-                        }
-                    }
+                    text: "Sign out";
+                    height: 32px;
+                    clicked => { sign-out(); }
                 }
             }
         }
-    }
-}
 
-export component CreateWindow inherits Window {
-    width: 800px;
-    height: 600px;
-    background: #1a1a1a;
-    title: "Create P2P Chat Room";
-    
-    callback switch-to-chat-window(string /* username */);
-    callback switch-to-start-window;
-    
-    in-out property<string> username: "";
-    
-    GridLayout {
-        padding-left: 200px;
-        padding-right: 200px;
-        padding-top: 150px;
-        padding-bottom: 150px;
-        spacing: 25px;
-        
-        Row {
-            Text {
-                text: "Create Room";
-                horizontal-alignment: center;
-                font-size: 32px;
-                color: #00ff88;
-                font-weight: 700;
-            }
+        Rectangle {
+            height: 2px;
+            background: #444;
         }
-        
-        Row {
-            LineEdit {
-                text: username;
-                placeholder-text: "Enter your username";
-                horizontal-alignment: center;
-                height: 40px;
-                edited(text) => {
-                    username = text;
-                }
-            }
-        }
-        
-        Row {
+
+        ScrollView {
             VerticalBox {
-                Button {
-                    text: "Back";
-                    height: 40px;
-                    clicked => { switch-to-start-window(); }
-                }
-                
-                Button {
-                    text: "Create Room";
-                    height: 40px;
-                    clicked => { 
-                        if (username != "") {
-                            switch-to-chat-window(username);
+                spacing: 6px;
+
+                for room in rooms: Rectangle {
+                    height: 62px;
+                    background: #2a2a2a;
+                    border-radius: 8px;
+
+                    HorizontalBox {
+                        padding: 12px;
+                        spacing: 10px;
+                        alignment: space-between;
+
+                        VerticalBox {
+                            spacing: 3px;
+                            Text {
+                                text: room.name;
+                                font-size: 15px;
+                                font-weight: 700;
+                                color: white;
+                            }
+                            Text {
+                                text: room.role + " - " + room.members + " member(s)" + (room.invite-only ? " - invite only" : "");
+                                font-size: 11px;
+                                color: #888;
+                            }
+                        }
+
+                        Button {
+                            text: room.membership == "join" ? "Open" : "Join";
+                            height: 32px;
+                            width: 90px;
+                            clicked => { open-room(room.name); }
                         }
                     }
                 }
             }
         }
+
+        Rectangle {
+            height: 2px;
+            background: #444;
+        }
+
+        HorizontalBox {
+            spacing: 10px;
+            height: 44px;
+
+            LineEdit {
+                text: new-room;
+                placeholder-text: "New room name";
+                edited(text) => { new-room = text; }
+            }
+
+            CheckBox {
+                text: "Invite only";
+                checked <=> new-room-invite-only;
+            }
+
+            Button {
+                text: "Create";
+                width: 100px;
+                clicked => {
+                    if (new-room != "") {
+                        create-room(new-room, new-room-invite-only);
+                        new-room = "";
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: status;
+            font-size: 12px;
+            color: #ffaa00;
+            wrap: word-wrap;
+        }
     }
 }
-
 
 export component ChatWindow inherits Window {
     width: 800px;
     height: 600px;
     background: #1a1a1a;
     title: "P2P Chat";
-    
+
     callback send-message(string /* message */);
     callback disconnect();
     callback refresh-saved-chats();
     callback copy-session-token();
-    
+
     in-out property<string> current-message: "";
     in-out property<string> current-username: "";
     in-out property<string> connection-status: "Disconnected";
+    in-out property<string> room-name: "";
+    in-out property<string> my-role: "";
     in-out property<[ChatMessage]> messages: [];
-    in-out property<[string]> online-users: [];
+    in-out property<[MemberItem]> members: [];
     in property<string> save-status: "";
     in-out property<string> session-token: "";
-    
+
     HorizontalBox {
         spacing: 10px;
         padding: 10px;
-        
+
         Rectangle {
-            width: 200px;
+            width: 210px;
             background: #2a2a2a;
             border-radius: 8px;
-            
+
             VerticalBox {
                 padding: 10px;
                 spacing: 10px;
-                
+
                 Text {
-                    text: "Online Users";
+                    text: "Members";
                     font-weight: 700;
                     font-size: 16px;
                 }
-                
+
                 Rectangle {
                     height: 2px;
                     background: #444;
                 }
-                
+
                 ScrollView {
                     VerticalBox {
-                        for user in online-users: Rectangle {
-                            height: 30px;
-                            background: user == current-username ? #00ff8844 : transparent;
+                        spacing: 2px;
+
+                        for member in members: Rectangle {
+                            height: 40px;
+                            background: member.is-me ? #00ff8822 : transparent;
                             border-radius: 4px;
-                            
-                            Text {
-                                text: user;
-                                vertical-alignment: center;
-                                horizontal-alignment: left;
-                                x: 8px;
+
+                            VerticalBox {
+                                padding-left: 8px;
+                                padding-top: 4px;
+                                padding-bottom: 4px;
+                                spacing: 1px;
+
+                                Text {
+                                    text: member.display-name;
+                                    font-size: 12px;
+                                    color: member.membership == "join" ? white : #777;
+                                }
+
+                                Text {
+                                    text: member.role + (member.membership == "join" ? "" : " - " + member.membership);
+                                    font-size: 9px;
+                                    color: member.role == "admin" ? #ffaa00 : member.role == "moderator" ? #0088ff : #666;
+                                }
                             }
                         }
                     }
                 }
             }
         }
-        
+
         VerticalBox {
-            
+
             Rectangle {
                 height: 55px;
                 background: #2d2d2d;
                 border-radius: 10px;
-                
+
                 HorizontalBox {
                     padding: 15px;
                     spacing: 12px;
                     alignment: space-between;
-                    
+
+                    VerticalBox {
+                        spacing: 1px;
+                        Text {
+                            text: room-name;
+                            font-size: 14px;
+                            font-weight: 700;
+                            color: white;
+                        }
+                        Text {
+                            text: my-role;
+                            font-size: 10px;
+                            color: #888;
+                        }
+                    }
+
                     Rectangle {
-                        background: connection-status == "Connected" ? #00ff8815 : 
+                        background: connection-status == "Connected" ? #00ff8815 :
                                    connection-status == "Connecting" ? #ff880015 : #ff444415;
-                        border-color: connection-status == "Connected" ? #00ff8840 : 
+                        border-color: connection-status == "Connected" ? #00ff8840 :
                                      connection-status == "Connecting" ? #ff880040 : #ff444440;
                         border-width: 1px;
                         border-radius: 14px;
                         height: 28px;
                         min-width: 100px;
                         y: (parent.height - self.height) / 2;
-                        
+
                         HorizontalBox {
                             padding: 8px;
                             spacing: 6px;
                             alignment: center;
-                            
+
                             Text {
                                 text: connection-status;
                                 font-size: 10px;
@@ -311,26 +471,25 @@ export component ChatWindow inherits Window {
                             }
                         }
                     }
-                    
-                    
+
                     Rectangle {
                         width: 85px;
                         height: 28px;
                         background: #444;
                         border-radius: 14px;
                         y: (parent.height - self.height) / 2;
-                        
+
                         TouchArea {
                             clicked => { disconnect(); }
-                            
+
                             Rectangle {
                                 width: 100%;
                                 height: 100%;
                                 background: parent.pressed ? #555 : parent.has-hover ? #4a4a4a : transparent;
                                 border-radius: 14px;
-                                
+
                                 Text {
-                                    text: "Disconnect";
+                                    text: "Leave";
                                     color: #ff6666;
                                     font-size: 10px;
                                     font-weight: 600;
@@ -340,7 +499,7 @@ export component ChatWindow inherits Window {
                             }
                         }
                     }
-                    
+
                     Rectangle {
                         width: 95px;
                         height: 28px;
@@ -349,16 +508,16 @@ export component ChatWindow inherits Window {
                         border-width: 1px;
                         border-radius: 14px;
                         y: (parent.height - self.height) / 2;
-                        
+
                         TouchArea {
                             clicked => { copy-session-token(); }
-                            
+
                             Rectangle {
                                 width: 100%;
                                 height: 100%;
                                 background: parent.pressed ? #0088ff33 : parent.has-hover ? #0088ff2a : transparent;
                                 border-radius: 14px;
-                                
+
                                 Text {
                                     text: "Copy Token";
                                     color: #00aaff;
@@ -372,29 +531,29 @@ export component ChatWindow inherits Window {
                     }
                 }
             }
-            
+
             ScrollView {
                 VerticalBox {
                     spacing: 3px;
-                    
+
                     for message in messages: Rectangle {
-                        background: message.is-own ? #00ff8822 : 
+                        background: message.is-own ? #00ff8822 :
                                    message.is-system ? #444444 : #333;
                         border-radius: 8px;
-                        
+
                         VerticalBox {
                             padding: 4px;
                             spacing: 1px;
-                            
+
                             HorizontalBox {
                                 Text {
                                     text: message.username;
-                                    color: message.is-own ? #00ff88 : 
+                                    color: message.is-own ? #00ff88 :
                                            message.is-system ? #ffaa00 : #0088ff;
                                     font-weight: 600;
                                     font-size: 11px;
                                 }
-                                
+
                                 Text {
                                     text: message.timestamp;
                                     color: #666;
@@ -402,7 +561,7 @@ export component ChatWindow inherits Window {
                                     horizontal-alignment: right;
                                 }
                             }
-                            
+
                             if message.is-system: Text {
                                 text: message.content;
                                 color: #ffaa00;
@@ -410,7 +569,7 @@ export component ChatWindow inherits Window {
                                 wrap: word-wrap;
                                 width: 100%;
                             }
-                            
+
                             if !message.is-system: Text {
                                 text: message.content;
                                 color: white;
@@ -421,11 +580,11 @@ export component ChatWindow inherits Window {
                     }
                 }
             }
-            
+
             HorizontalBox {
                 spacing: 10px;
                 height: 50px;
-                
+
                 LineEdit {
                     text: current-message;
                     placeholder-text: "Type your message...";

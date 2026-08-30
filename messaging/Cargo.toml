@@ -9,3 +9,6 @@ serde_json = { workspace = true }
 iroh = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }
+ed25519-dalek = "2.2"

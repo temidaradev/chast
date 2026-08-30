@@ -1,101 +1,138 @@
 use anyhow::Result;
+use client::{Net, RoomHistory};
 use futures_lite::StreamExt;
-use iroh::{Endpoint, NodeId, protocol::Router};
-use iroh_gossip::{api::Event, api::GossipReceiver, net::Gossip, proto::TopicId};
-use messaging::*;
+use iroh::{NodeId, SecretKey};
+use iroh_gossip::{api::Event as GossipEvent, api::GossipReceiver, proto::TopicId};
+use messaging::{Event, MessageBody, Membership, new_event_id, now_timestamp};
 use slint::{SharedString, Weak};
 use std::sync::{Arc, Mutex};
-use ticket::*;
+use ticket::Ticket;
 
 use crate::app::{
     app_state::AppState,
     types,
-    ui_handlers::{handle_user_connect, handle_user_disconnect, update_messages},
+    ui_handlers::{update_members, update_messages, push_system},
 };
 
 const DEFAULT_RELAY_URL: &str = "https://relay.iroh.link";
+const JOIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
-pub async fn setup_networking(
-    ticket: Option<Ticket>,
-    username: String,
-) -> Result<(
-    iroh_gossip::api::GossipSender,
-    GossipReceiver,
-    Endpoint,
-    Router,
-    Ticket,
-)> {
+pub enum Mode {
+    Server,
+    Peer { display_name: String },
+}
+
+pub struct Connected {
+    pub sender: iroh_gossip::api::GossipSender,
+    pub receiver: GossipReceiver,
+    pub topic: TopicId,
+    pub secret_key: SecretKey,
+    pub ticket: Ticket,
+    pub node_id: NodeId,
+}
+
+pub async fn join_gossip(net: &Net, ticket: Option<Ticket>, mode: Mode) -> Result<Connected> {
+    let secret_key = net.secret_key.clone();
+    let node_id = net.endpoint.node_id();
+
     let (topic, nodes) = match ticket {
-        Some(Ticket { topic, nodes }) => {
-            println!("> joining chat room for topic {topic}");
-            (topic, nodes)
-        }
-        None => {
-            let topic = TopicId::from_bytes(rand::random());
-            println!("> opening chat room for topic {topic}");
-            (topic, vec![])
+        Some(ticket) => (ticket.topic, ticket.nodes),
+        None => (TopicId::from_bytes(rand::random()), vec![]),
+    };
+
+    let shareable = {
+        let relay_url = DEFAULT_RELAY_URL.parse().expect("invalid relay url");
+        let node_addr = iroh::NodeAddr::new(node_id).with_relay_url(relay_url);
+        Ticket {
+            topic,
+            nodes: vec![node_addr],
         }
     };
 
-    let endpoint = Endpoint::builder().discovery_n0().bind().await?;
-    println!("> our node id: {}", endpoint.node_id());
+    let node_ids: Vec<NodeId> = nodes.iter().map(|node| node.node_id).collect();
+    let bootstrapping = !nodes.is_empty();
+    for node in nodes {
+        net.endpoint.add_node_addr(node)?;
+    }
 
-    let gossip = Gossip::builder().spawn(endpoint.clone());
-    let router = Router::builder(endpoint.clone())
-        .accept(iroh_gossip::ALPN, gossip.clone())
-        .spawn();
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-    let ticket = {
-        let mut node_addr = iroh::NodeAddr::new(endpoint.node_id());
-
-        if let Some(_discovery) = endpoint.discovery() {
-            let relay_url = DEFAULT_RELAY_URL.parse().expect("Invalid relay URL");
-            node_addr = node_addr.with_relay_url(relay_url);
+    let (sender, receiver) = if bootstrapping {
+        let joining = net.gossip.subscribe_and_join(topic, node_ids);
+        match tokio::time::timeout(JOIN_TIMEOUT, joining).await {
+            Ok(joined) => joined?.split(),
+            Err(_) => anyhow::bail!(
+                "nobody answered in this room. If it is a server room, the server may be offline or not hosting it yet"
+            ),
         }
-
-        let nodes = vec![node_addr];
-        Ticket { topic, nodes }
-    };
-    println!("> ticket to join us: {ticket}");
-
-    let node_ids: Vec<NodeId> = nodes.iter().map(|p| p.node_id).collect();
-    if !nodes.is_empty() {
-        println!("> trying to connect to {} nodes...", nodes.len());
-        for node in nodes.into_iter() {
-            endpoint.add_node_addr(node)?;
-        }
-
-        let (sender, receiver) = gossip.subscribe_and_join(topic, node_ids).await?.split();
-        println!("> connected!");
-        println!("DEBUG: About to send AboutMe message");
-
-        let message = Message::new(MessageBody::AboutMe {
-            from: endpoint.node_id(),
-            name: username,
-        });
-        println!("DEBUG: Created AboutMe message, about to broadcast");
-        sender.broadcast(message.to_vec().into()).await?;
-        println!("DEBUG: AboutMe message broadcast complete");
-
-        Ok((sender, receiver, endpoint, router, ticket))
     } else {
-        println!("> creating new room, subscribing to topic...");
-        let subscription = gossip.subscribe(topic, vec![]).await?;
-        let (sender, receiver) = subscription.split();
-        println!("> connected!");
-        println!("DEBUG: About to send AboutMe message");
+        net.gossip.subscribe(topic, vec![]).await?.split()
+    };
 
-        let message = Message::new(MessageBody::AboutMe {
-            from: endpoint.node_id(),
-            name: username,
-        });
-        println!("DEBUG: Created AboutMe message, about to broadcast");
-        sender.broadcast(message.to_vec().into()).await?;
-        println!("DEBUG: AboutMe message broadcast complete");
+    let greeting = match mode {
+        Mode::Server => MessageBody::Hello,
+        Mode::Peer { display_name } => MessageBody::Introduce { display_name },
+    };
+    sender
+        .broadcast(messaging::sign(&secret_key, greeting)?.into())
+        .await?;
 
-        Ok((sender, receiver, endpoint, router, ticket))
+    Ok(Connected {
+        sender,
+        receiver,
+        topic,
+        secret_key,
+        ticket: shareable,
+        node_id,
+    })
+}
+
+fn secret_of(app_state: &Arc<Mutex<AppState>>) -> Option<SecretKey> {
+    app_state.lock().unwrap().secret_key.clone()
+}
+
+pub async fn request_sync(app_state: &Arc<Mutex<AppState>>) -> Result<()> {
+    let (sender, since_seq) = {
+        let state = app_state.lock().unwrap();
+        (
+            state.sender.clone(),
+            state.history.lock().unwrap().last_seq,
+        )
+    };
+
+    if let (Some(sender), Some(secret_key)) = (sender, secret_of(app_state)) {
+        let bytes = messaging::sign(&secret_key, MessageBody::SyncRequest { since_seq })?;
+        sender.broadcast(bytes.into()).await?;
+    }
+
+    Ok(())
+}
+
+fn persist(app_state: &Arc<Mutex<AppState>>) {
+    let state = app_state.lock().unwrap();
+    if let Some(topic) = state.current_topic {
+        let history = state.history.lock().unwrap();
+        if let Err(e) = history.save(&topic) {
+            eprintln!("failed to save history: {}", e);
+        }
+    }
+}
+
+pub fn event_to_chat_message(event: &Event, my_user: &str) -> types::ChatMessage {
+    types::ChatMessage {
+        username: SharedString::from(event.sender_name.clone()),
+        content: SharedString::from(event.text.clone()),
+        timestamp: SharedString::from(format_timestamp(&event.timestamp)),
+        is_own: event.sender_user == my_user,
+        is_system: false,
+    }
+}
+
+pub fn format_timestamp(raw: &str) -> String {
+    match chrono::DateTime::parse_from_rfc3339(raw) {
+        Ok(parsed) => parsed
+            .with_timezone(&chrono::Local)
+            .format("%d/%m/%Y %H:%M:%S")
+            .to_string(),
+        Err(_) => raw.to_string(),
     }
 }
 
@@ -108,272 +145,334 @@ pub async fn handle_messages(
         {
             let state = app_state.lock().unwrap();
             if state.sender.is_none() {
-                println!("DEBUG: Sender is None, stopping message handling");
                 break;
             }
         }
 
-        match receiver.try_next().await {
-            Ok(Some(event)) => {
-                if let Event::Received(msg) = event {
-                    match Message::from_bytes(&msg.content)?.body {
-                        MessageBody::AboutMe { from, name } => {
-                            let is_new_user = {
-                                let state = app_state.lock().unwrap();
-                                let names = state.names.lock().unwrap();
-                                !names.contains_key(&from)
-                            };
+        let event = match receiver.try_next().await {
+            Ok(Some(event)) => event,
+            Ok(None) => break,
+            Err(e) => {
+                let keep_going = app_state.lock().unwrap().sender.is_some();
+                if keep_going {
+                    eprintln!("error receiving message: {}", e);
+                    continue;
+                }
+                break;
+            }
+        };
 
-                            {
-                                let state = app_state.lock().unwrap();
-                                let mut names = state.names.lock().unwrap();
-                                names.insert(from, name.clone());
-                            }
+        let GossipEvent::Received(msg) = event else {
+            continue;
+        };
 
-                            if is_new_user {
-                                handle_user_connect(&chat_handle, &app_state, &name);
+        let (from, body) = match messaging::verify(&msg.content) {
+            Ok(verified) => verified,
+            Err(e) => {
+                eprintln!("ignored an unsigned message: {}", e);
+                continue;
+            }
+        };
 
-                                let (sender, current_node_id, current_username) = {
-                                    let state = app_state.lock().unwrap();
-                                    (
-                                        state.sender.clone(),
-                                        state.current_node_id,
-                                        state.current_username.clone(),
-                                    )
-                                };
+        let (server, node_id, my_user) = {
+            let state = app_state.lock().unwrap();
+            (
+                state.server_node_id,
+                state.current_node_id,
+                state.my_user_id.clone(),
+            )
+        };
 
-                                if let (Some(sender), Some(current_node_id)) =
-                                    (sender, current_node_id)
-                                {
-                                    let response_message = Message::new(MessageBody::AboutMe {
-                                        from: current_node_id,
-                                        name: current_username,
-                                    });
+        let from_server = server == Some(from);
 
-                                    if let Err(e) =
-                                        sender.broadcast(response_message.to_vec().into()).await
-                                    {
-                                        eprintln!("Failed to send AboutMe response: {}", e);
-                                    } else {
-                                        println!(
-                                            "DEBUG: Sent AboutMe response to new user {}",
-                                            name
-                                        );
-                                    }
-                                }
-                            }
+        match body {
+            MessageBody::Presence {
+                node_id: who,
+                user_id,
+                display_name,
+                power_level,
+                membership,
+            } => {
+                if !from_server {
+                    continue;
+                }
 
-                            crate::app::ui_handlers::update_online_users(&chat_handle, &app_state);
+                {
+                    let state = app_state.lock().unwrap();
+                    let mut roster = state.roster.lock().unwrap();
+                    let mut nodes = state.nodes.lock().unwrap();
 
-                            println!("> {} is now known as {}", from.fmt_short(), name);
+                    if membership == Membership::Join {
+                        roster.insert(
+                            user_id.clone(),
+                            crate::app::app_state::RosterEntry {
+                                user_id: user_id.clone(),
+                                display_name: display_name.clone(),
+                                power_level,
+                                membership,
+                            },
+                        );
+                        nodes.insert(who, user_id.clone());
+                    } else {
+                        roster.remove(&user_id);
+                        nodes.remove(&who);
+                    }
+                }
+
+                update_members(&chat_handle, &app_state);
+            }
+
+            MessageBody::Rejected { to, reason } => {
+                if !from_server || Some(to) != node_id {
+                    continue;
+                }
+                push_system(&app_state, format!("the server refused: {}", reason));
+                update_messages(&chat_handle, &app_state);
+            }
+
+            MessageBody::Message { id, text } => {
+                let (sender_user, display) = {
+                    let state = app_state.lock().unwrap();
+                    let nodes = state.nodes.lock().unwrap();
+                    let roster = state.roster.lock().unwrap();
+
+                    match nodes.get(&from) {
+                        Some(user_id) => {
+                            let display = roster
+                                .get(user_id)
+                                .map(|entry| entry.display_name.clone())
+                                .unwrap_or_else(|| user_id.clone());
+                            (user_id.clone(), display)
                         }
-                        MessageBody::Disconnect { from, name } => {
-                            {
-                                let state = app_state.lock().unwrap();
-                                let mut names = state.names.lock().unwrap();
-                                names.remove(&from);
-                            }
+                        None => (String::new(), from.fmt_short()),
+                    }
+                };
 
-                            handle_user_disconnect(&chat_handle, &app_state, &name);
+                let event = Event {
+                    id,
+                    seq: 0,
+                    sender: from,
+                    sender_user,
+                    sender_name: display,
+                    text,
+                    timestamp: now_timestamp(),
+                };
 
-                            println!("> {} ({}) disconnected", name, from.fmt_short());
+                let is_new = {
+                    let state = app_state.lock().unwrap();
+                    let mut history = state.history.lock().unwrap();
+                    history.record(event.clone())
+                };
+
+                if is_new {
+                    {
+                        let state = app_state.lock().unwrap();
+                        let mut messages = state.messages.lock().unwrap();
+                        messages.push(event_to_chat_message(&event, &my_user));
+                    }
+                    persist(&app_state);
+                    update_messages(&chat_handle, &app_state);
+                }
+            }
+
+            MessageBody::SyncResponse {
+                to,
+                events,
+                latest_seq,
+            } => {
+                if !from_server || Some(to) != node_id {
+                    continue;
+                }
+
+                let mut added = 0;
+                let mut highest = 0;
+
+                {
+                    let state = app_state.lock().unwrap();
+                    let mut history = state.history.lock().unwrap();
+                    let mut messages = state.messages.lock().unwrap();
+
+                    for event in events {
+                        highest = highest.max(event.seq);
+                        if history.record(event.clone()) {
+                            messages.push(event_to_chat_message(&event, &my_user));
+                            added += 1;
                         }
-                        MessageBody::Message { from, text } => {
-                            let (sender_name, is_own) = {
-                                let state = app_state.lock().unwrap();
-                                let names = state.names.lock().unwrap();
-                                let sender_name = names
-                                    .get(&from)
-                                    .map_or_else(|| from.fmt_short(), String::to_string);
-                                let is_own = state.current_node_id == Some(from);
-                                (sender_name, is_own)
-                            };
+                    }
+                    history.advance(highest);
+                }
 
-                            let new_message = types::ChatMessage {
-                                username: SharedString::from(sender_name.clone()),
-                                content: SharedString::from(text.clone()),
-                                timestamp: SharedString::from(
-                                    chrono::Local::now().format("%d/%m/%Y %H:%M:%S").to_string(),
-                                ),
-                                is_own,
-                                is_system: false,
-                            };
+                if added > 0 {
+                    push_system(
+                        &app_state,
+                        format!("restored {} message(s) from the server", added),
+                    );
+                }
 
-                            {
-                                let state = app_state.lock().unwrap();
-                                let mut messages = state.messages.lock().unwrap();
-                                messages.push(new_message);
-                            }
+                persist(&app_state);
+                update_messages(&chat_handle, &app_state);
 
-                            update_messages(&chat_handle, &app_state);
-                            println!(
-                                "DEBUG: Message added to GUI - from {}: {}",
-                                sender_name, text
-                            );
+                if highest > 0 && highest < latest_seq {
+                    let app_state = app_state.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = request_sync(&app_state).await {
+                            eprintln!("failed to continue sync: {}", e);
                         }
-                        MessageBody::MessageHistory { messages } => {
-                            println!(
-                                "DEBUG: Received message history with {} messages",
-                                messages.len()
-                            );
+                    });
+                }
+            }
 
-                            let message_count = messages.len();
+            MessageBody::Introduce { display_name } => {
+                if server.is_some() {
+                    continue;
+                }
 
-                            {
-                                let state = app_state.lock().unwrap();
-                                let mut chat_messages = state.messages.lock().unwrap();
+                let is_new = {
+                    let state = app_state.lock().unwrap();
+                    let mut roster = state.roster.lock().unwrap();
+                    let mut nodes = state.nodes.lock().unwrap();
 
-                                for (index, stored_msg) in messages.into_iter().enumerate() {
-                                    let is_own = state.current_node_id == Some(stored_msg.from);
+                    let user_id = from.to_string();
+                    nodes.insert(from, user_id.clone());
+                    roster
+                        .insert(
+                            user_id.clone(),
+                            crate::app::app_state::RosterEntry {
+                                user_id,
+                                display_name: display_name.clone(),
+                                power_level: 0,
+                                membership: Membership::Join,
+                            },
+                        )
+                        .is_none()
+                };
 
-                                    let history_message = types::ChatMessage {
-                                        username: SharedString::from(stored_msg.sender_name),
-                                        content: SharedString::from(stored_msg.text),
-                                        timestamp: SharedString::from(stored_msg.timestamp),
-                                        is_own,
-                                        is_system: false,
-                                    };
+                update_members(&chat_handle, &app_state);
 
-                                    chat_messages.insert(index, history_message);
-                                }
-                            }
+                if is_new {
+                    push_system(&app_state, format!("{} joined", display_name));
+                    update_messages(&chat_handle, &app_state);
 
-                            if message_count > 0 {
-                                let system_message = types::ChatMessage {
-                                    username: SharedString::from("System"),
-                                    content: SharedString::from(format!(
-                                        "--- Loaded {} messages from history ---",
-                                        message_count
-                                    )),
-                                    timestamp: SharedString::from(
-                                        chrono::Local::now()
-                                            .format("%d/%m/%Y %H:%M:%S")
-                                            .to_string(),
-                                    ),
-                                    is_own: false,
-                                    is_system: true,
-                                };
+                    let (sender, my_name) = {
+                        let state = app_state.lock().unwrap();
+                        (state.sender.clone(), state.display_name.clone())
+                    };
 
-                                {
-                                    let state = app_state.lock().unwrap();
-                                    let mut chat_messages = state.messages.lock().unwrap();
-                                    chat_messages.push(system_message);
-                                }
-                            }
-
-                            update_messages(&chat_handle, &app_state);
-                            println!("DEBUG: Message history loaded and displayed");
+                    if let (Some(sender), Some(secret_key)) = (sender, secret_of(&app_state)) {
+                        let bytes = messaging::sign(
+                            &secret_key,
+                            MessageBody::Introduce {
+                                display_name: my_name,
+                            },
+                        )?;
+                        if let Err(e) = sender.broadcast(bytes.into()).await {
+                            eprintln!("failed to introduce ourselves: {}", e);
                         }
                     }
                 }
             }
-            Ok(None) => {
-                println!("DEBUG: Message stream ended");
-                break;
-            }
-            Err(e) => {
-                let should_continue = {
+
+            MessageBody::Goodbye => {
+                if server.is_some() {
+                    continue;
+                }
+
+                let left = {
                     let state = app_state.lock().unwrap();
-                    state.sender.is_some()
+                    let mut roster = state.roster.lock().unwrap();
+                    let mut nodes = state.nodes.lock().unwrap();
+
+                    match nodes.remove(&from) {
+                        Some(user_id) => roster.remove(&user_id).map(|e| e.display_name),
+                        None => None,
+                    }
                 };
 
-                if should_continue {
-                    eprintln!("Error receiving message: {}", e);
-                } else {
-                    println!("DEBUG: Stopping message handling due to disconnection");
-                    break;
+                if let Some(name) = left {
+                    push_system(&app_state, format!("{} left", name));
+                    update_messages(&chat_handle, &app_state);
                 }
+                update_members(&chat_handle, &app_state);
             }
+
+            MessageBody::Hello | MessageBody::SyncRequest { .. } => {}
         }
     }
+
     Ok(())
 }
 
-pub async fn send_message(message: String, app_state: Arc<Mutex<AppState>>) -> Result<()> {
-    let (sender, node_id, username) = {
+pub async fn send_message(text: String, app_state: Arc<Mutex<AppState>>) -> Result<()> {
+    let (sender, my_user, display_name) = {
         let state = app_state.lock().unwrap();
         (
             state.sender.clone(),
-            state.current_node_id,
-            state.current_username.clone(),
+            state.my_user_id.clone(),
+            state.display_name.clone(),
         )
     };
 
-    if let (Some(sender), Some(node_id)) = (sender, node_id) {
-        let new_message = types::ChatMessage {
-            username: SharedString::from(username),
-            content: SharedString::from(message.clone()),
-            timestamp: SharedString::from(
-                chrono::Local::now().format("%d/%m/%Y %H:%M:%S").to_string(),
-            ),
-            is_own: true,
-            is_system: false,
+    let Some(secret_key) = secret_of(&app_state) else {
+        return Ok(());
+    };
+
+    if let Some(sender) = sender {
+        let event = Event {
+            id: new_event_id(),
+            seq: 0,
+            sender: secret_key.public(),
+            sender_user: my_user.clone(),
+            sender_name: display_name,
+            text: text.clone(),
+            timestamp: now_timestamp(),
         };
 
         {
             let state = app_state.lock().unwrap();
+            state.history.lock().unwrap().record(event.clone());
             let mut messages = state.messages.lock().unwrap();
-            messages.push(new_message);
+            messages.push(event_to_chat_message(&event, &my_user));
         }
 
-        let msg = Message::new(MessageBody::Message {
-            from: node_id,
-            text: message,
-        });
-        sender.broadcast(msg.to_vec().into()).await?;
+        persist(&app_state);
+
+        let bytes = messaging::sign(
+            &secret_key,
+            MessageBody::Message {
+                id: event.id,
+                text,
+            },
+        )?;
+        sender.broadcast(bytes.into()).await?;
     }
 
     Ok(())
 }
 
-pub async fn send_disconnect(app_state: Arc<Mutex<AppState>>) -> Result<()> {
-    let (sender, node_id, username) = {
-        let state = app_state.lock().unwrap();
-        (
-            state.sender.clone(),
-            state.current_node_id,
-            state.current_username.clone(),
-        )
-    };
+pub async fn send_goodbye(app_state: Arc<Mutex<AppState>>) -> Result<()> {
+    let sender = app_state.lock().unwrap().sender.clone();
 
-    if let (Some(sender), Some(node_id)) = (sender, node_id) {
-        let msg = Message::new(MessageBody::Disconnect {
-            from: node_id,
-            name: username,
-        });
-        sender.broadcast(msg.to_vec().into()).await?;
-        println!("DEBUG: Disconnect message sent");
+    if let (Some(sender), Some(secret_key)) = (sender, secret_of(&app_state)) {
+        let bytes = messaging::sign(&secret_key, MessageBody::Goodbye)?;
+        sender.broadcast(bytes.into()).await?;
     }
 
     Ok(())
 }
 
 pub async fn cleanup_network_resources(app_state: Arc<Mutex<AppState>>) -> Result<()> {
-    let (endpoint, router) = {
+    persist(&app_state);
+
+    {
         let mut state = app_state.lock().unwrap();
         state.sender = None;
         state.current_node_id = None;
-        state.current_session_token = None;
-        state.names.lock().unwrap().clear();
+        state.current_topic = None;
+        state.server_node_id = None;
+        state.roster.lock().unwrap().clear();
         state.messages.lock().unwrap().clear();
-
-        let endpoint = state.endpoint.take();
-        let router = state.router.take();
-        (endpoint, router)
-    };
-
-    if let Some(router) = router {
-        if let Err(e) = router.shutdown().await {
-            eprintln!("Error shutting down router: {}", e);
-        } else {
-            println!("DEBUG: Router shut down successfully");
-        }
+        *state.history.lock().unwrap() = RoomHistory::default();
     }
 
-    if let Some(_endpoint) = endpoint {
-        println!("DEBUG: Endpoint dropped and resources cleaned up");
-    }
-
-    println!("DEBUG: Network resources cleaned up");
     Ok(())
 }

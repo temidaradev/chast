@@ -27,6 +27,13 @@ cargo build --release
 
 _Grab a coffee - this might take a few minutes the first time as Rust downloads and compiles all dependencies..._
 
+On Nix there's a flake, so you can grab everything with:
+
+```bash
+nix develop
+cargo build --release
+```
+
 ### 3. Run it
 
 ```bash
@@ -37,9 +44,54 @@ cargo run --bin p2p-chat
 
 For a more traditional chat experience with message tracking and room management, you can run the server component. This provides additional features beyond pure peer-to-peer communication :3
 
+It hosts as many rooms as you want and keeps everything in a SQLite file, so your rooms and everything said in them survive a reboot:
+
 ```bash
-cargo run --bin server
+cargo run --bin server -- create general
+cargo run --bin server -- list
+cargo run --bin server -- serve
+cargo run --bin server -- delete general
 ```
+
+`serve` is what runs when you don't say otherwise. The database lives at `server.db` unless you point `P2P_CHAT_DB` somewhere else.
+
+The server keeps its network identity in that same file, so its address and every room ticket stay exactly the same across restarts. A ticket you shared months ago still works after the machine reboots, and when people come back they only download the messages they actually missed.
+
+Your client remembers things too, your identity key in `~/.config/p2p-chat/identity.key` and a copy of each room in `~/.config/p2p-chat/rooms/`. Open a chat and the history is already sitting there before the server even answers.
+
+### Accounts
+
+When the server starts it prints a **server address**, a long hex string. That's the one thing people need to sign up, and it's not the same thing as a room ticket. Think of it like this: the address gets you to the server, an account gets you a name, and an invite gets you into a room.
+
+Accounts look like `@you:server`. Passwords are hashed with argon2 and every device gets its own token, so you can be signed in on your laptop and your phone at the same time without them fighting. Rooms have power levels like Matrix does (100 admin, 50 moderator, 0 member) and they're invite only unless you say otherwise.
+
+Logins never touch the gossip network. They go over their own encrypted connection, so your password is never broadcast into a room :3 Every message is signed by the device that sent it, and only the server gets to decide which key belongs to which account, so nobody can post pretending to be you.
+
+Running things from the server console:
+
+```bash
+cargo run --bin server -- register alice hunter2hunter2
+cargo run --bin server -- create general alice
+cargo run --bin server -- invite general bob
+cargo run --bin server -- members general
+cargo run --bin server -- grant general bob 50
+```
+
+There's also `chatctl`, a terminal client for when you don't feel like clicking:
+
+```bash
+cargo run --bin chatctl -- connect <server-address>
+cargo run --bin chatctl -- register alice hunter2hunter2
+cargo run --bin chatctl -- rooms
+cargo run --bin chatctl -- send general "hello"
+cargo run --bin chatctl -- read general
+```
+
+### No account needed
+
+Accounts are completely optional! The sign in window has a second half for plain old peer to peer: type a name, hit **Create direct room**, and share the ticket. Or paste a friend's ticket and hit **Join direct room** instead.
+
+No server, no signup, exactly how the app has always worked. Nothing gets saved for you, names are whatever people say they are, and the room is gone once everyone closes it.
 
 You can also install pre-built executables for both the chat GUI and server from the [releases page](https://github.com/temidaradev/p2p-vpn-rust/releases).
 
@@ -50,27 +102,28 @@ That's it!
 ### Starting a chat room
 
 1. Run the application
-2. Click "**Create Room**"
-3. Enter your username
-4. Click "**Create**"
-5. **Copy the ticket** this is your room's "ticket"
-6. Share this ticket with friends you want to chat with!
+2. In the lower half of the window, type your name
+3. Leave the ticket box empty and click "**Create direct room**"
+4. **Copy the ticket** with the button in the top bar
+5. Share this ticket with friends you want to chat with!
 
 ### Joining someone's room
 
 1. Get a ticket from a friend
 2. Run the application
-3. Click "**Join Room**"
-4. Enter your username
-5. Paste the ticket
-6. Click "**Join**"
-7. Start chatting!
+3. Type your name and paste the ticket in the lower half
+4. Click "**Join direct room**"
+5. Start chatting!
 
-If you want to enter the server im hosting on my server, you can join by pasting this room id into related section:
+### Using an account instead
 
-```
-pmrhi33qnfrseos3ge4dmlbrga4symrrgawdcnrvfqzdeobmgm4synjtfqzdalbrg42cymjtguwdmnzmgiydelbrgazcymjrhewdcmrrfq2dklbsgaycynbrfqzdamzmgi2tglbrg4wdcmjyfqzdknjmgu4cymjvhawdonjmgizdelbxgawdmojmgiydglbrhazcymzwluwce3tpmrsxgir2ln5se3tpmrsv62leei5centgmzsdimbtgu3tqztfg5tdqzjumnrtqobzgm4tkmzxgfqtgmdcgm4wemdbge4tsyrshbsgmntbmfswim3bmzsdgnlemuzdanrqgftcelbcojswyylzl52xe3bchirgq5duobztulzpojswyylzfzuxe33ifzwgs3tlfyxselbcmruxezldorpwczdeojsxg43fomrduw25pvox2
-```
+1. Ask whoever runs the server for its **server address**
+2. Paste it in the top box and pick a username and password
+3. Hit "**Create account**" the first time, "**Sign in**" after that
+4. You land on your room list, where you can open a room or make one of your own
+5. Invite only rooms need someone to invite you first
+
+You only have to paste that address once. Next time you open the app it fills itself in and signs you back in on its own 🎉
 
 ## How it works under the hood
 
@@ -90,7 +143,9 @@ But using the server option breaks this...
 This is a Rust workspace with several components:
 
 - **`p2p-chat/`** - The main GUI application (what you actually run)
-- **`server/`** - Optional server to break the rules of p2p :3
+- **`server/`** - Optional server to break the rules of p2p :3, holds the accounts and the rooms that stick around
+- **`client/`** - Shared client bits, your identity, your saved session, and talking to a server
+- **`chatctl/`** - Terminal client for people who like terminals
 - **`messaging/`** - Message format and serialization logic
 - **`ticket/`** - Room "ticket" encoding/decoding
 - **`target/`** - Compiled binaries (created when you build)
