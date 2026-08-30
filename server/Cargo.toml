@@ -14,3 +14,6 @@ futures-lite = { workspace = true }
 messaging = { path = "../messaging" }
 ticket = { path = "../ticket" }
 serde_json = { workspace = true }
+rusqlite = { version = "0.31", features = ["bundled"] }
+argon2 = "0.5"
+sha2 = "0.10"

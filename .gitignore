@@ -4,3 +4,9 @@
 .env
 /saved_chats
 server_message_history.json
+server.db
+server.db-shm
+server.db-wal
+*.db
+*.db-shm
+*.db-wal

@@ -4,6 +4,8 @@ members = [
     "p2p-chat",
     "ticket",
     "server",
+    "client",
+    "chatctl",
 ]
 resolver = "3"
 
@@ -23,3 +25,4 @@ rfd = "0.11"
 data-encoding = "2.9.0"
 messaging = { path = "messaging" }
 ticket = { path = "ticket" }
+client = { path = "client" }

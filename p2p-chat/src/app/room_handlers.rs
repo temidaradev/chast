@@ -1,205 +1,269 @@
 use anyhow::Result;
+use messaging::{rpc::RoomSummary, user::power_label};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel, Weak};
-use std::{
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
-use ticket::*;
+use std::sync::{Arc, Mutex};
 
 use crate::app::{
-    app_state::AppState,
-    networking::{handle_messages, setup_networking},
+    app_state::{AppState, RosterEntry},
+    networking::{Mode, event_to_chat_message, handle_messages, join_gossip, request_sync},
+    session::Session,
     types,
-    ui_handlers::update_online_users,
+    ui_handlers::{push_system, update_members, update_messages},
 };
+use client::{Net, RoomHistory};
+use std::str::FromStr;
+use ticket::Ticket;
 
-fn create_room_joined_message() -> String {
-    format!(
-        "✅ Successfully joined room!\n\nYou can share this room token with others:\n\nCOPY TOKEN FROM THE BUTTON AT THE TOPBAR\n\nInstructions: Select and copy the text between the brackets to share with others.",
-    )
+pub fn room_items(rooms: &[RoomSummary]) -> Vec<types::RoomItem> {
+    rooms
+        .iter()
+        .map(|room| types::RoomItem {
+            id: SharedString::from(room.id.clone()),
+            name: SharedString::from(room.name.clone()),
+            membership: SharedString::from(room.membership.as_str()),
+            role: SharedString::from(power_label(room.power_level)),
+            members: room.member_count as i32,
+            invite_only: room.invite_only,
+        })
+        .collect()
 }
 
-fn create_room_created_message() -> String {
-    format!(
-        "🎫 Room created successfully!\n\nShare this invitation token with others to join:\n\nCOPY TOKEN FROM THE BUTTON AT THE TOPBAR\n\nInstructions: Select and copy the text between the brackets to share with others.",
-    )
-}
-
-pub async fn join_room(
-    username: String,
-    ticket_str: String,
-    app_state: Arc<Mutex<AppState>>,
-    chat_handle: Weak<types::ChatWindow>,
-    join_handle: Weak<types::JoinWindow>,
+pub async fn refresh_rooms(
+    session: &Session,
+    rooms_handle: Weak<types::RoomsWindow>,
 ) -> Result<()> {
-    let ticket = Ticket::from_str(&ticket_str)?;
-    let (sender, receiver, endpoint, router, _ticket) =
-        setup_networking(Some(ticket), username.clone()).await?;
+    let rooms = session.rooms().await?;
+    let items = room_items(&rooms);
+    let user_id = session.user_id();
+    let display_name = session.display_name();
 
-    {
-        let mut state = app_state.lock().unwrap();
-        state.sender = Some(sender);
-        state.current_username = username.clone();
-        state.current_node_id = Some(endpoint.node_id());
-        state.current_session_token = Some(ticket_str.clone());
-        state.endpoint = Some(endpoint.clone());
-        state.router = Some(router);
-    }
-
-    let chat_handle_clone = chat_handle.clone();
-    let app_state_clone = app_state.clone();
-    tokio::spawn(async move {
-        if let Err(e) = handle_messages(receiver, chat_handle_clone, app_state_clone).await {
-            eprintln!("Error handling messages: {}", e);
+    slint::invoke_from_event_loop(move || {
+        if let Some(window) = rooms_handle.upgrade() {
+            window.set_rooms(ModelRc::new(VecModel::from(items)));
+            window.set_user_id(SharedString::from(user_id));
+            window.set_display_name(SharedString::from(display_name));
+            window.set_status(SharedString::from(""));
         }
-    });
-
-    update_online_users(&chat_handle, &app_state);
-
-    let chat_handle_for_ui = chat_handle.clone();
-    let join_handle_for_ui = join_handle.clone();
-    let username_for_ui = username.clone();
-    let app_state_for_ui = app_state.clone();
-
-    match slint::invoke_from_event_loop(move || {
-        if let Some(chat) = chat_handle_for_ui.upgrade() {
-            chat.set_current_username(SharedString::from(username_for_ui.clone()));
-            chat.set_connection_status(SharedString::from("Connected"));
-
-            let ticket_message = create_room_joined_message();
-            let system_message = types::ChatMessage {
-                username: SharedString::from("System"),
-                content: SharedString::from(ticket_message),
-                timestamp: SharedString::from(chrono::Local::now().format("%H:%M").to_string()),
-                is_own: false,
-                is_system: true,
-            };
-
-            {
-                let state = app_state_for_ui.lock().unwrap();
-                let mut messages = state.messages.lock().unwrap();
-                messages.push(system_message.clone());
-            }
-
-            let current_messages = {
-                let state = app_state_for_ui.lock().unwrap();
-                let messages = state.messages.lock().unwrap();
-                messages.clone()
-            };
-            let messages_model = VecModel::from(current_messages);
-            chat.set_messages(ModelRc::new(messages_model));
-
-            if let Some(join) = join_handle_for_ui.upgrade() {
-                let _ = chat.show();
-                let _ = join.hide();
-            }
-        }
-    }) {
-        Ok(_) => {}
-        Err(e) => {
-            return Err(anyhow::anyhow!("Failed to update UI: {:?}", e));
-        }
-    }
+    })
+    .map_err(|e| anyhow::anyhow!("failed to update the room list: {:?}", e))?;
 
     Ok(())
 }
 
-pub async fn create_room(
-    username: String,
+pub async fn open_room(
+    net: &Net,
+    session: Arc<Session>,
+    room_name: String,
     app_state: Arc<Mutex<AppState>>,
     chat_handle: Weak<types::ChatWindow>,
-    create_handle: Weak<types::CreateWindow>,
+    rooms_handle: Weak<types::RoomsWindow>,
 ) -> Result<()> {
-    println!("Creating room for username: {}", username);
-    let (sender, receiver, endpoint, router, room_ticket) =
-        setup_networking(None, username.clone()).await?;
-    println!("DEBUG: setup_networking returned successfully");
-    println!("Networking setup complete");
+    let (summary, ticket) = session.open(&room_name).await?;
+    let server_node_id = ticket.nodes.first().map(|node| node.node_id);
+
+    let connected = join_gossip(net, Some(ticket), Mode::Server).await?;
+    let node_id = connected.node_id;
+
+    let my_user = session.user_id();
+    let history = RoomHistory::load(&connected.topic, &summary.ticket);
+    let restored: Vec<types::ChatMessage> = history
+        .events
+        .iter()
+        .map(|event| event_to_chat_message(event, &my_user))
+        .collect();
+
+    let members = session.members(&summary.name).await.unwrap_or_default();
 
     {
         let mut state = app_state.lock().unwrap();
-        state.sender = Some(sender);
-        state.current_username = username.clone();
-        state.current_node_id = Some(endpoint.node_id());
-        state.current_session_token = Some(room_ticket.to_string());
-        state.endpoint = Some(endpoint.clone());
-        state.router = Some(router);
-    }
-    println!("App state updated");
+        state.sender = Some(connected.sender);
+        state.secret_key = Some(connected.secret_key);
+        state.current_node_id = Some(node_id);
+        state.server_node_id = server_node_id;
+        state.current_topic = Some(connected.topic);
+        state.current_session_token = Some(summary.ticket.clone());
+        state.current_room = summary.name.clone();
+        state.my_user_id = my_user.clone();
+        state.display_name = session.display_name();
+        state.my_power = summary.power_level;
+        *state.history.lock().unwrap() = history;
+        *state.messages.lock().unwrap() = restored;
 
-    let chat_handle_clone = chat_handle.clone();
-    let app_state_clone = app_state.clone();
+        let mut roster = state.roster.lock().unwrap();
+        roster.clear();
+        for member in members {
+            if member.membership == messaging::Membership::Join {
+                roster.insert(
+                    member.user_id.clone(),
+                    RosterEntry {
+                        user_id: member.user_id,
+                        display_name: member.display_name,
+                        power_level: member.power_level,
+                        membership: member.membership,
+                    },
+                );
+            }
+        }
+    }
+
+    let chat_for_messages = chat_handle.clone();
+    let state_for_messages = app_state.clone();
     tokio::spawn(async move {
-        if let Err(e) = handle_messages(receiver, chat_handle_clone, app_state_clone).await {
-            eprintln!("Error handling messages: {}", e);
+        if let Err(e) =
+            handle_messages(connected.receiver, chat_for_messages, state_for_messages).await
+        {
+            eprintln!("error handling messages: {}", e);
         }
     });
-    println!("Message handler started");
 
-    update_online_users(&chat_handle, &app_state);
+    let room_label = summary.name.clone();
+    let role = power_label(summary.power_level).to_string();
+    let chat_for_ui = chat_handle.clone();
+    let state_for_ui = app_state.clone();
 
-    let chat_handle_for_ui = chat_handle.clone();
-    let create_handle_for_ui = create_handle.clone();
-    let username_for_ui = username.clone();
-    let app_state_for_ui = app_state.clone();
-
-    match slint::invoke_from_event_loop(move || {
-        println!("Attempting to switch to chat window...");
-        if let Some(chat) = chat_handle_for_ui.upgrade() {
-            println!("Chat window found, updating UI");
-            chat.set_current_username(SharedString::from(username_for_ui.clone()));
+    slint::invoke_from_event_loop(move || {
+        if let Some(chat) = chat_for_ui.upgrade() {
+            chat.set_room_name(SharedString::from(room_label));
+            chat.set_my_role(SharedString::from(role));
+            chat.set_current_username(SharedString::from(
+                state_for_ui.lock().unwrap().display_name.clone(),
+            ));
             chat.set_connection_status(SharedString::from("Connected"));
 
-            let ticket_message = create_room_created_message();
-            let system_message = types::ChatMessage {
-                username: SharedString::from("System"),
-                content: SharedString::from(ticket_message),
-                timestamp: SharedString::from(chrono::Local::now().format("%H:%M").to_string()),
-                is_own: false,
-                is_system: true,
-            };
-
-            {
-                let state = app_state_for_ui.lock().unwrap();
-                let mut messages = state.messages.lock().unwrap();
-                messages.push(system_message.clone());
-            }
-
-            let current_messages = {
-                let state = app_state_for_ui.lock().unwrap();
+            let messages = {
+                let state = state_for_ui.lock().unwrap();
                 let messages = state.messages.lock().unwrap();
                 messages.clone()
             };
-            let messages_model = VecModel::from(current_messages);
-            chat.set_messages(ModelRc::new(messages_model));
-
-            println!("Added system message with room token");
-
-            if let Some(create) = create_handle_for_ui.upgrade() {
-                println!("Create window found, switching to chat");
-                match chat.show() {
-                    Ok(_) => println!("Chat window shown successfully"),
-                    Err(e) => println!("Error showing chat window: {:?}", e),
-                }
-                match create.hide() {
-                    Ok(_) => println!("Create window hidden successfully"),
-                    Err(e) => println!("Error hiding create window: {:?}", e),
-                }
-                println!("Window switch completed");
-            } else {
-                println!("ERROR: Create window handle is invalid");
-            }
-        } else {
-            println!("ERROR: Chat window handle is invalid");
+            chat.set_messages(ModelRc::new(VecModel::from(messages)));
+            let _ = chat.show();
         }
-    }) {
-        Ok(_) => println!("Event loop invocation successful"),
-        Err(e) => {
-            println!("ERROR: Failed to invoke on event loop: {:?}", e);
-            return Err(anyhow::anyhow!("Failed to update UI: {:?}", e));
+
+        if let Some(rooms) = rooms_handle.upgrade() {
+            let _ = rooms.hide();
         }
+    })
+    .map_err(|e| anyhow::anyhow!("failed to show the chat window: {:?}", e))?;
+
+    update_members(&chat_handle, &app_state);
+    update_messages(&chat_handle, &app_state);
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(400)).await;
+    request_sync(&app_state).await?;
+
+    Ok(())
+}
+
+pub async fn open_peer_room(
+    net: &Net,
+    ticket_str: String,
+    display_name: String,
+    app_state: Arc<Mutex<AppState>>,
+    chat_handle: Weak<types::ChatWindow>,
+    auth_handle: Weak<types::AuthWindow>,
+) -> Result<()> {
+    let ticket = match ticket_str.trim() {
+        "" => None,
+        raw => Some(Ticket::from_str(raw).map_err(|_| anyhow::anyhow!("that room ticket is not valid"))?),
+    };
+
+    let joining = ticket.is_some();
+    let connected = join_gossip(
+        net,
+        ticket,
+        Mode::Peer {
+            display_name: display_name.clone(),
+        },
+    )
+    .await?;
+
+    let node_id = connected.node_id;
+    let my_user = node_id.to_string();
+    let share = connected.ticket.to_string();
+
+    let history = RoomHistory::load(&connected.topic, &share);
+    let restored: Vec<types::ChatMessage> = history
+        .events
+        .iter()
+        .map(|event| event_to_chat_message(event, &my_user))
+        .collect();
+
+    {
+        let mut state = app_state.lock().unwrap();
+        state.sender = Some(connected.sender);
+        state.secret_key = Some(connected.secret_key);
+        state.current_node_id = Some(node_id);
+        state.server_node_id = None;
+        state.current_topic = Some(connected.topic);
+        state.current_session_token = Some(share);
+        state.current_room = "Direct room".to_string();
+        state.my_user_id = my_user.clone();
+        state.display_name = display_name.clone();
+        state.my_power = 0;
+        *state.history.lock().unwrap() = history;
+        *state.messages.lock().unwrap() = restored;
+
+        let mut roster = state.roster.lock().unwrap();
+        roster.clear();
+        roster.insert(
+            my_user.clone(),
+            RosterEntry {
+                user_id: my_user.clone(),
+                display_name: display_name.clone(),
+                power_level: 0,
+                membership: messaging::Membership::Join,
+            },
+        );
+        state.nodes.lock().unwrap().insert(node_id, my_user);
     }
 
-    println!("Create room completed successfully for: {}", username);
+    push_system(
+        &app_state,
+        if joining {
+            "Joined a direct peer to peer room. There is no server here, so nothing is stored for you and names are self declared.".to_string()
+        } else {
+            "Created a direct peer to peer room. Share the ticket with the Copy Token button. It only works while you stay open.".to_string()
+        },
+    );
+
+    let chat_for_messages = chat_handle.clone();
+    let state_for_messages = app_state.clone();
+    tokio::spawn(async move {
+        if let Err(e) =
+            handle_messages(connected.receiver, chat_for_messages, state_for_messages).await
+        {
+            eprintln!("error handling messages: {}", e);
+        }
+    });
+
+    let chat_for_ui = chat_handle.clone();
+    let state_for_ui = app_state.clone();
+
+    slint::invoke_from_event_loop(move || {
+        if let Some(chat) = chat_for_ui.upgrade() {
+            chat.set_room_name(SharedString::from("Direct room"));
+            chat.set_my_role(SharedString::from("peer to peer, no account"));
+            chat.set_current_username(SharedString::from(display_name));
+            chat.set_connection_status(SharedString::from("Connected"));
+
+            let messages = {
+                let state = state_for_ui.lock().unwrap();
+                let messages = state.messages.lock().unwrap();
+                messages.clone()
+            };
+            chat.set_messages(ModelRc::new(VecModel::from(messages)));
+            let _ = chat.show();
+        }
+
+        if let Some(auth) = auth_handle.upgrade() {
+            auth.set_busy(false);
+            let _ = auth.hide();
+        }
+    })
+    .map_err(|e| anyhow::anyhow!("failed to show the chat window: {:?}", e))?;
+
+    update_members(&chat_handle, &app_state);
+    update_messages(&chat_handle, &app_state);
+
     Ok(())
 }
